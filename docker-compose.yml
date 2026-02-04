@@ -36,9 +36,20 @@ services:
       - php
     networks:
       - tickets_network
+      - traefik_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tickets.rule=PathPrefix(`/tickets`) || PathPrefix(`/Tickets`)"
+      - "traefik.http.routers.tickets.entrypoints=web"
+      - "traefik.http.services.tickets.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.tickets-strip.stripprefix.prefixes=/tickets,/Tickets"
+      - "traefik.http.routers.tickets.middlewares=tickets-strip"
+      - "traefik.docker.network=traefik_network"
     restart: unless-stopped
 
 networks:
   tickets_network:
     driver: bridge
     name: tickets_network
+  traefik_network:
+    external: true
