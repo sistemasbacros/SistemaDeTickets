@@ -45,9 +45,20 @@ jobs:
       - name: 🚀 Deploy files to test server
         run: |
           Write-Host "INFO: Desplegando archivos..."
+          Write-Host "INFO: Directorio fuente: $(Get-Location)"
+          Write-Host "INFO: Directorio destino: $env:DEPLOY_PATH"
 
-          # Copiar todos los archivos excepto .env
-          $excludeItems = @('.env', 'nginx/logs', '.git')
+          # Verificar que estamos en el directorio correcto
+          if (-not (Test-Path "Dockerfile")) {
+            Write-Host "ERROR: Dockerfile no encontrado en directorio fuente"
+            Write-Host "ERROR: Archivos disponibles:"
+            Get-ChildItem -Path . | Select-Object Name -First 20
+            exit 1
+          }
+
+          # Copiar todos los archivos excepto .env y logs
+          $excludeItems = @('.env', 'nginx/logs', '.git', 'README.md')
+          $fileCount = 0
 
           Get-ChildItem -Path "." -Recurse | ForEach-Object {
             $shouldExclude = $false
@@ -68,10 +79,28 @@ jobs:
               }
 
               Copy-Item -Path $_.FullName -Destination $destPath -Force
+              $fileCount++
+
+              # Log archivos críticos
+              if ($_.Name -in @('Dockerfile', 'docker-compose.yml', 'docker-compose.test.yml')) {
+                Write-Host "OK: Copiado $($_.Name) -> $destPath"
+              }
             }
           }
 
-          Write-Host "OK: Archivos desplegados en $env:DEPLOY_PATH"
+          Write-Host "OK: $fileCount archivos desplegados en $env:DEPLOY_PATH"
+
+          # Verificar que los archivos críticos fueron copiados
+          $criticalFiles = @('Dockerfile', 'docker-compose.test.yml')
+          foreach ($file in $criticalFiles) {
+            $filePath = Join-Path $env:DEPLOY_PATH $file
+            if (Test-Path $filePath) {
+              Write-Host "OK: Verificado $file en destino"
+            } else {
+              Write-Host "ERROR: $file NO fue copiado al destino"
+              exit 1
+            }
+          }
         shell: powershell
 
       - name: 🐳 Verify Docker installation
