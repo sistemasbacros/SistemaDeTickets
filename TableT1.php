@@ -786,7 +786,12 @@ $usuario = $_SESSION['user_username'] ?? 'N/A';
         { data: 'Prioridad' },
         { data: 'Empresa' },
         { data: 'Asunto' },
-        { data: 'Mensaje' },
+       { 
+        data: 'Mensaje',
+        render: function(data, type, row) {
+            return '<div style="max-width:200px; white-space:normal; word-wrap:break-word;">' + data + '</div>';
+        }
+    },
         { data: 'Adjuntos' },
         { data: 'Fecha' },
         { data: 'Hora' },

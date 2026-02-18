@@ -16,15 +16,47 @@ $id_empleado = $_SESSION['user_id'] ?? 'N/A';
 $area_usuario = $_SESSION['user_area'] ?? 'N/A';
 $usuario = $_SESSION['user_username'] ?? 'N/A';
 
-// Obtener los ULTIMOS DOS componentes como apellidos
-$partes_nombre = explode(' ', trim($nombre_usuario));
-$apellidos_usuario = '';
-if (count($partes_nombre) >= 2) {
-    // Tomar los ULTIMOS DOS elementos del array
-    $apellidos_usuario = implode(' ', array_slice($partes_nombre, -2));
+// ===== FUNCIÓN PARA EXTRAER APELLIDOS DE FORMA INTELIGENTE =====
+function extraerApellidos($nombre_completo) {
+    $nombre_completo = trim($nombre_completo);
+    $partes = explode(' ', $nombre_completo);
+    $num_partes = count($partes);
+    
+    // Caso 1: Nombre completo (4 partes) - Ej: ROMERO LOPEZ LUIS ANTONIO
+    if ($num_partes >= 4) {
+        // Tomar las primeras 2 partes como apellidos
+        return implode(' ', array_slice($partes, 0, 2));
+    }
+    
+    // Caso 2: Nombre con 3 partes - Ej: GARCIA HERNANDEZ JUAN
+    if ($num_partes == 3) {
+        // Tomar las primeras 2 partes como apellidos
+        return implode(' ', array_slice($partes, 0, 2));
+    }
+    
+    // Caso 3: Nombre con 2 partes - Ej: PEREZ JUAN
+    if ($num_partes == 2) {
+        // La primera parte es el apellido
+        return $partes[0];
+    }
+    
+    // Caso 4: Nombre con 1 parte
+    return $nombre_completo;
 }
 
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS"; // Server de la base de datos
+// Extraer apellidos del nombre
+$apellidos_usuario = extraerApellidos($nombre_usuario);
+
+// Crear solo 2 comodines:
+$comodines_busqueda = [
+    $apellidos_usuario,                          // Apellidos solos
+    $nombre_usuario                               // Nombre completo
+];
+
+// Eliminar duplicados
+$comodines_busqueda = array_unique($comodines_busqueda);
+
+$serverName = "DESAROLLO-BACRO\SQLEXPRESS";
 $connectionInfo = array("Database" => "Ticket", "UID" => "Larome03", "PWD" => "Larome03", "CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect($serverName, $connectionInfo);
 
@@ -37,7 +69,7 @@ $nombreFiltro = isset($_GET['nombre']) ? "%" . $_GET['nombre'] . "%" : "%";
 $fechaInicioFiltro = isset($_GET['fecha_inicial']) ? $_GET['fecha_inicial'] : "1900-01-01";
 $fechaFinFiltro = isset($_GET['fecha_final']) ? $_GET['fecha_final'] : "9999-12-31";
 
-// CONSULTA SQL ACTUALIZADA - Incluyendo campos de imagen
+// ===== CONSULTA SQL CON 2 COMODINES =====
 $sql = "SELECT 
     [Nombre],
     [Correo],
@@ -58,18 +90,25 @@ $sql = "SELECT
 FROM [dbo].[T3] 
 WHERE 
     (CONVERT(DATE, fecha, 103) BETWEEN ? AND ?) 
-    AND (Nombre LIKE ? OR ? = '%')  -- Filtro por nombre si se especifica
-    AND (Nombre LIKE ?)  -- FILTRO OBLIGATORIO por apellidos del usuario
-ORDER BY CONVERT(DATE, fecha, 103)";
+    AND (Nombre LIKE ? OR ? = '%')
+    AND (
+        (Nombre LIKE ?) 
+        OR (Nombre LIKE ?)
+    )
+ORDER BY CONVERT(DATE, fecha, 103) DESC";
 
-// Parámetros para la consulta
+// Parámetros base
 $params = array(
     $fechaInicioFiltro, 
     $fechaFinFiltro, 
     $nombreFiltro,
-    $nombreFiltro,
-    "%" . $apellidos_usuario . "%"  // FILTRO OBLIGATORIO por apellidos
+    $nombreFiltro
 );
+
+// Agregar parámetros para los 2 comodines
+foreach ($comodines_busqueda as $comodin) {
+    $params[] = "%" . $comodin . "%";
+}
 
 // Ejecutar la consulta
 $stmt = sqlsrv_query($conn, $sql, $params);
@@ -131,14 +170,12 @@ while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
     array_push($array11, $row['Estatus']);
     array_push($array12, $row['PA']);
     
-    // Campos de imagen - IMPORTANTE: Corregir la URL
+    // Campos de imagen
     $imagen_url = $row['imagen_url'];
     
     // Si la URL contiene "../uploads/", reemplazarla con la URL correcta
     if (!empty($imagen_url) && strpos($imagen_url, '../uploads/') !== false) {
-        // Extraer solo el nombre del archivo después de uploads/
         $nombre_archivo = basename($imagen_url);
-        // Crear URL completa: http://desarollo-bacros/uploads/nombre_archivo
         $imagen_url = $base_url . 'uploads/' . $nombre_archivo;
     }
     
@@ -172,7 +209,7 @@ function formatFileSize($bytes) {
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Filtrar Tickets - BacroCorp</title>
+    <title>Mis Tickets - BacroCorp</title>
 
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -292,7 +329,7 @@ function formatFileSize($bytes) {
             margin-bottom: 5px;
             font-weight: 400;
             text-align: center;
-            max-width: 500px;
+            max-width: 700px;
             margin-left: auto;
             margin-right: auto;
             line-height: 1.5;
@@ -355,10 +392,6 @@ function formatFileSize($bytes) {
             outline: none;
         }
         
-        .form-control::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-        }
-        
         .form-label {
             font-weight: 600;
             font-family: var(--font-heading);
@@ -391,7 +424,7 @@ function formatFileSize($bytes) {
             border-spacing: 0;
         }
         
-        /* ENCABEZADOS BLANCOS CON TEXTO AZUL - ESTILOS MÁS FUERTES */
+        /* ENCABEZADOS BLANCOS CON TEXTO AZUL */
         #ticketsTable thead th {
             position: sticky !important;
             top: 0 !important;
@@ -425,27 +458,8 @@ function formatFileSize($bytes) {
             background-color: transparent !important;
         }
         
-        table.dataTable tbody tr {
-            background-color: transparent !important;
-        }
-        
-        table.dataTable tbody tr td {
-            color: white !important;
-        }
-        
-        table.dataTable.table-striped > tbody > tr:nth-of-type(odd) > * {
-            background-color: rgba(255, 255, 255, 0.05) !important;
-            color: white !important;
-        }
-        
-        table.dataTable.table-striped > tbody > tr:nth-of-type(even) > * {
-            background-color: transparent !important;
-            color: white !important;
-        }
-        
         table.dataTable tbody tr:hover td {
             background-color: rgba(59, 130, 246, 0.3) !important;
-            color: white !important;
         }
         
         .priority-high {
@@ -520,7 +534,16 @@ function formatFileSize($bytes) {
             margin-left: 10px;
         }
         
-        /* OVERRIDE COMPLETO DE DATATABLES BOOTSTRAP 5 */
+        .name-badge {
+            background: rgba(59, 130, 246, 0.3);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        
         .dataTables_wrapper .dataTables_length,
         .dataTables_wrapper .dataTables_filter,
         .dataTables_wrapper .dataTables_info,
@@ -533,17 +556,6 @@ function formatFileSize($bytes) {
             background: rgba(255, 255, 255, 0.07) !important;
             border: 2px solid rgba(255, 255, 255, 0.12) !important;
             color: white !important;
-        }
-        
-        /* ELIMINAR ESTILOS DE DATATABLES POR COMPLETO */
-        table.dataTable thead .sorting,
-        table.dataTable thead .sorting_asc,
-        table.dataTable thead .sorting_desc,
-        table.dataTable thead .sorting_asc_disabled,
-        table.dataTable thead .sorting_desc_disabled {
-            background-image: none !important;
-            background-color: white !important;
-            color: #1e3a8a !important;
         }
         
         /* Estilos para botones de imagen */
@@ -586,6 +598,33 @@ function formatFileSize($bytes) {
             color: white;
         }
         
+        .search-info {
+            background: rgba(59, 130, 246, 0.2);
+            border-left: 4px solid var(--accent-blue);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .pattern-badge {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #64ffda;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-right: 8px;
+            display: inline-block;
+            margin-bottom: 5px;
+        }
+        
+        .pattern-main {
+            background: rgba(59, 130, 246, 0.3);
+            border: 1px solid var(--accent-blue);
+            color: white;
+            font-weight: bold;
+        }
+        
         @media (max-width: 768px) {
             .container {
                 padding: 0 15px;
@@ -605,11 +644,6 @@ function formatFileSize($bytes) {
                 font-size: 28px;
             }
             
-            table.dataTable thead th, table.dataTable tbody td {
-                white-space: normal;
-                word-break: break-word;
-            }
-            
             .image-buttons {
                 flex-direction: column;
             }
@@ -622,15 +656,18 @@ function formatFileSize($bytes) {
     <!-- Header Section -->
     <div class="header-section">
         <div class="logo-glow">
-            <i class="fas fa-filter"></i>
+            <i class="fas fa-ticket-alt"></i>
         </div>
         
-        <h1 class="system-title">FILTRAR TICKETS</h1>
-        <p class="system-subtitle">Sistema de Búsqueda y Filtrado Avanzado de Tickets</p>
+        <h1 class="system-title">MIS TICKETS</h1>
+        <p class="system-subtitle">Búsqueda inteligente por APELLIDOS o NOMBRE COMPLETO</p>
         
         <div class="security-badge">
             <i class="fas fa-user-tag"></i>
-            <strong>Filtro activo:</strong> Mostrando solo tickets que contienen "<strong><?php echo htmlspecialchars($apellidos_usuario); ?></strong>" juntos
+            <strong>Solicitante:</strong> 
+            <span class="name-badge">
+                <i class="fas fa-user-circle"></i> <?php echo htmlspecialchars($nombre_usuario); ?>
+            </span>
             <?php if ($total_tickets > 0): ?>
                 <span class="ticket-counter">
                     <i class="fas fa-ticket-alt"></i> <?php echo $total_tickets; ?> tickets
@@ -653,9 +690,39 @@ function formatFileSize($bytes) {
                     </div>
                 </div>
                 <div class="col-md-4 text-end">
-                    <a href="javascript:history.back()" class="btn btn-outline-light">
-                        <i class="fas fa-arrow-left"></i> Volver
+                    <a href="dashboard.php" class="btn btn-primary">
+                        <i class="fas fa-home me-2"></i>Dashboard
                     </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información de búsqueda - SOLO 2 COMODINES -->
+        <div class="search-info">
+            <div class="row">
+                <div class="col-md-8">
+                    <i class="fas fa-info-circle me-2" style="color: var(--accent-blue);"></i>
+                    <strong>Buscando tickets con estos patrones:</strong>
+                    <div style="margin-top: 10px;">
+                        <?php foreach ($comodines_busqueda as $index => $patron): ?>
+                            <span class="pattern-badge <?php echo $index == 0 ? 'pattern-main' : ''; ?>">
+                                <i class="fas fa-<?php echo $index == 0 ? 'users' : 'user'; ?> me-1"></i>
+                                <?php echo htmlspecialchars($patron); ?>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
+                    <div style="margin-top: 8px;">
+                        <small class="text-muted">
+                            <i class="fas fa-check-circle text-success me-1"></i>
+                            <strong>Apellidos detectados:</strong> <?php echo htmlspecialchars($apellidos_usuario); ?>
+                        </small>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <small class="text-muted">
+                        <i class="fas fa-database me-1"></i> 
+                        <?php echo $total_tickets; ?> tickets encontrados
+                    </small>
                 </div>
             </div>
         </div>
@@ -666,7 +733,7 @@ function formatFileSize($bytes) {
                 <div class="col-12">
                     <h3 class="section-title" style="font-family: var(--font-heading); font-weight: 700; font-size: 1.2rem; margin-bottom: 20px; color: var(--accent-blue); display: flex; align-items: center; gap: 10px;">
                         <i class="fas fa-filter"></i>
-                        Filtros de Búsqueda Adicionales
+                        Filtros Adicionales (dentro de MIS tickets)
                     </h3>
                 </div>
             </div>
@@ -675,9 +742,9 @@ function formatFileSize($bytes) {
                 <div class="col-md-4">
                     <label for="nombre" class="form-label">
                         <i class="fas fa-search"></i>
-                        Búsqueda específica
+                        Buscar por asunto/mensaje
                     </label>
-                    <input type="text" id="nombre" name="nombre" class="form-control" placeholder="Buscar dentro de sus tickets..." 
+                    <input type="text" id="nombre" name="nombre" class="form-control" placeholder="Buscar en mis tickets..." 
                            value="<?php echo isset($_GET['nombre']) ? htmlspecialchars($_GET['nombre']) : ''; ?>" />
                 </div>
                 <div class="col-md-3">
@@ -723,7 +790,6 @@ function formatFileSize($bytes) {
                             <th>No Ticket</th>
                             <th>Estatus</th>
                             <th>Responsable</th>
-                            <!-- NUEVA COLUMNA -->
                             <th>Imagen Adjunta</th>
                         </tr>
                     </thead>
@@ -743,7 +809,7 @@ function formatFileSize($bytes) {
                             <td><?php echo htmlspecialchars($array11[$i]); ?></td>
                             <td><?php echo htmlspecialchars($array12[$i]); ?></td>
                             
-                            <!-- NUEVA CELDA PARA IMAGEN -->
+                            <!-- CELDA PARA IMAGEN -->
                             <td>
                                 <?php 
                                 $imagen_url = $array13[$i];
@@ -751,12 +817,9 @@ function formatFileSize($bytes) {
                                 $imagen_tipo = $array15[$i];
                                 $imagen_size = $array16[$i];
                                 
-                                // Verificar si hay imagen
                                 if (!empty($imagen_url) && $imagen_url !== 'NULL' && $imagen_url !== null && !empty($imagen_nombre)): 
-                                    // La URL ya está formateada correctamente como: http://desarollo-bacros/uploads/ticket_1768416635_6967e57bbfcb2.jpg
                                 ?>
                                     <div class="image-buttons">
-                                        <!-- Botón para ver la imagen en modal -->
                                         <button type="button" 
                                                 class="btn btn-sm btn-image-view view-image-btn"
                                                 data-image-url="<?php echo htmlspecialchars($imagen_url); ?>"
@@ -765,7 +828,6 @@ function formatFileSize($bytes) {
                                             <i class="fas fa-eye"></i> Ver
                                         </button>
                                         
-                                        <!-- Botón para descargar la imagen -->
                                         <a href="<?php echo htmlspecialchars($imagen_url); ?>" 
                                            download="<?php echo htmlspecialchars($imagen_nombre); ?>" 
                                            class="btn btn-sm btn-image-download"
@@ -777,10 +839,6 @@ function formatFileSize($bytes) {
                                     <div class="image-info">
                                         <div><strong><?php echo htmlspecialchars(substr($imagen_nombre, 0, 25)); ?><?php echo strlen($imagen_nombre) > 25 ? '...' : ''; ?></strong></div>
                                         <div><?php echo formatFileSize($imagen_size); ?></div>
-                                        <div style="color: #64ffda; font-size: 0.7rem;">
-                                            <?php echo strtoupper(pathinfo($imagen_nombre, PATHINFO_EXTENSION)); ?> | 
-                                            Ticket: <?php echo htmlspecialchars($array10[$i]); ?>
-                                        </div>
                                     </div>
                                 <?php else: ?>
                                     <span class="badge bg-secondary">Sin imagen</span>
@@ -797,11 +855,19 @@ function formatFileSize($bytes) {
                     <i class="fas fa-inbox"></i>
                 </div>
                 <h3 style="color: rgba(255, 255, 255, 0.7); margin-bottom: 15px;">No se encontraron tickets</h3>
-                <p style="color: rgba(255, 255, 255, 0.5); max-width: 500px; margin: 0 auto;">
-                    No hay tickets registrados que contengan los apellidos "<strong><?php echo htmlspecialchars($apellidos_usuario); ?></strong>" JUNTOS.
+                <p style="color: rgba(255, 255, 255, 0.5); max-width: 600px; margin: 0 auto;">
+                    No hay tickets registrados con:
                 </p>
-                <a href="javascript:history.back()" class="btn btn-primary mt-4">
-                    <i class="fas fa-arrow-left me-2"></i> Volver al sistema
+                <div style="margin: 20px auto; max-width: 500px;">
+                    <span class="pattern-badge pattern-main">
+                        <i class="fas fa-users me-1"></i> <?php echo htmlspecialchars($apellidos_usuario); ?>
+                    </span>
+                    <span class="pattern-badge">
+                        <i class="fas fa-user me-1"></i> <?php echo htmlspecialchars($nombre_usuario); ?>
+                    </span>
+                </div>
+                <a href="dashboard.php" class="btn btn-primary mt-4">
+                    <i class="fas fa-home me-2"></i> Volver al Dashboard
                 </a>
             </div>
             <?php endif; ?>
@@ -818,9 +884,7 @@ function formatFileSize($bytes) {
                 </div>
                 <div class="modal-body text-center">
                     <img id="modalImagePreview" src="" alt="Vista previa" class="img-fluid rounded" style="max-height: 70vh;">
-                    <div class="mt-3" id="imageInfo">
-                        <!-- La información de la imagen se carga aquí dinámicamente -->
-                    </div>
+                    <div class="mt-3" id="imageInfo"></div>
                 </div>
                 <div class="modal-footer">
                     <a href="#" id="modalDownloadLink" class="btn btn-success">
@@ -840,17 +904,15 @@ function formatFileSize($bytes) {
     <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.datatables.net/plug-ins/1.13.4/sorting/datetime-moment.js"></script>
 
     <script>
         $(document).ready(function() {
-            // Solo inicializar DataTable si hay datos
             <?php if ($total_tickets > 0): ?>
             
-            // Registrar el plugin para ordenar fechas con Moment.js
+            // Registrar el plugin para ordenar fechas
             $.fn.dataTable.moment('DD/MM/YYYY');
 
-            // Inicializar la tabla de DataTable
+            // Inicializar la tabla
             var table = $('#ticketsTable').DataTable({
                 scrollY: 750,
                 scrollX: true,
@@ -871,79 +933,53 @@ function formatFileSize($bytes) {
                         last: "Último",
                         next: "Siguiente",
                         previous: "Anterior"
-                    },
-                    loadingRecords: "Cargando...",
-                    processing: "Procesando..."
+                    }
                 },
                 order: [],
-                columnDefs: [{
-                    orderable: false,
-                    targets: '_all'
-                }],
                 drawCallback: function(settings) {
-                    // Forzar texto blanco en todas las celdas
                     $('#ticketsTable tbody td').css('color', 'white');
-                    // Forzar encabezados blancos con texto azul
                     $('#ticketsTable thead th').css({
                         'color': '#1e3a8a',
                         'background': 'white',
                         'background-color': 'white'
                     });
                     
-                    // Reasignar eventos a los botones después de cada redibujado de DataTable
                     $('.view-image-btn').off('click').on('click', function() {
                         var imageUrl = $(this).data('image-url');
                         var imageName = $(this).data('image-name');
                         
-                        // Mostrar la imagen en el modal
                         $('#modalImagePreview').attr('src', imageUrl);
                         $('#imageModalTitle').text('Vista Previa: ' + imageName);
-                        
-                        // Configurar enlace de descarga
                         $('#modalDownloadLink').attr('href', imageUrl);
                         $('#modalDownloadLink').attr('download', imageName);
                         
-                        // Mostrar información adicional
                         var imageInfo = `
                             <div class="row">
                                 <div class="col-md-6">
                                     <p><strong>Nombre:</strong> ${imageName}</p>
-                                    <p><strong>URL:</strong> <small>${imageUrl}</small></p>
                                 </div>
                                 <div class="col-md-6 text-end">
                                     <p><strong>Ticket:</strong> ${$(this).closest('tr').find('td:eq(9)').text()}</p>
-                                    <p><strong>Usuario:</strong> ${$(this).closest('tr').find('td:eq(0)').text()}</p>
                                 </div>
                             </div>
                         `;
                         $('#imageInfo').html(imageInfo);
                         
-                        // Mostrar el modal
                         var imageModal = new bootstrap.Modal(document.getElementById('imagePreviewModal'));
                         imageModal.show();
                     });
                 },
-                initComplete: function() {
-                    // Aplicar estilos después de inicializar
-                    setTimeout(function() {
-                        $('#ticketsTable thead th').css({
-                            'color': '#1e3a8a',
-                            'background': 'white',
-                            'background-color': 'white'
-                        });
-                    }, 100);
-                },
                 columnDefs: [
                     {
-                        targets: [2], // Columna Prioridad
+                        targets: [2],
                         render: function(data, type, row) {
                             if (type === 'display') {
                                 var priority = data.toLowerCase();
                                 var className = 'priority-medium';
                                 
-                                if (priority.includes('alta') || priority.includes('high')) {
+                                if (priority.includes('alta') || priority.includes('urgente')) {
                                     className = 'priority-high';
-                                } else if (priority.includes('baja') || priority.includes('low')) {
+                                } else if (priority.includes('baja')) {
                                     className = 'priority-low';
                                 }
                                 
@@ -953,7 +989,7 @@ function formatFileSize($bytes) {
                         }
                     },
                     {
-                        targets: [10], // Columna Estatus
+                        targets: [10],
                         render: function(data, type, row) {
                             if (type === 'display') {
                                 var status = data.toLowerCase();
@@ -961,7 +997,7 @@ function formatFileSize($bytes) {
                                 
                                 if (status.includes('cerrado') || status.includes('closed')) {
                                     className = 'status-closed';
-                                } else if (status.includes('proceso') || status.includes('progress')) {
+                                } else if (status.includes('proceso')) {
                                     className = 'status-in-progress';
                                 }
                                 
@@ -971,86 +1007,20 @@ function formatFileSize($bytes) {
                         }
                     },
                     {
-                        targets: [9], // Columna No Ticket
+                        targets: [9],
                         render: function(data, type, row) {
                             if (type === 'display') {
                                 return '<span class="badge bg-dark">#' + data + '</span>';
                             }
                             return data;
                         }
-                    },
-                    {
-                        targets: [6], // Columna Adjunto
-                        render: function(data, type, row) {
-                            if (type === 'display') {
-                                if (data && data.trim() !== '' && data.trim() !== 'N/A' && data.trim() !== 'NULL') {
-                                    return '<a href="' + data + '" target="_blank" class="btn btn-sm btn-outline-light"><i class="fas fa-paperclip"></i> Ver</a>';
-                                }
-                                return '<span style="color: rgba(255, 255, 255, 0.7);">N/A</span>';
-                            }
-                            return data;
-                        }
-                    },
-                    {
-                        targets: [12], // Columna Imagen Adjunta
-                        width: '200px',
-                        render: function(data, type, row) {
-                            return data;
-                        }
                     }
                 ]
             });
 
-            // Forzar estilos después de inicializar DataTable
-            setTimeout(function() {
-                // Forzar encabezados blancos
-                $('#ticketsTable thead th').css({
-                    'color': '#1e3a8a',
-                    'background': 'white',
-                    'background-color': 'white',
-                    'font-weight': '700',
-                    'border-bottom': '2px solid #3b82f6'
-                });
-                
-                // Forzar texto blanco en celdas
-                $('#ticketsTable tbody td').css('color', 'white');
-                $('#ticketsTable tbody tr').css('background-color', 'transparent');
-            }, 200);
+            <?php endif; ?>
 
-            // Evento para botones de ver imagen
-            $(document).on('click', '.view-image-btn', function() {
-                var imageUrl = $(this).data('image-url');
-                var imageName = $(this).data('image-name');
-                
-                // Mostrar la imagen en el modal
-                $('#modalImagePreview').attr('src', imageUrl);
-                $('#imageModalTitle').text('Vista Previa: ' + imageName);
-                
-                // Configurar enlace de descarga
-                $('#modalDownloadLink').attr('href', imageUrl);
-                $('#modalDownloadLink').attr('download', imageName);
-                
-                // Mostrar información adicional
-                var imageInfo = `
-                    <div class="row">
-                        <div class="col-md-6">
-                            <p><strong>Nombre:</strong> ${imageName}</p>
-                            <p><strong>URL:</strong> <small>${imageUrl}</small></p>
-                        </div>
-                        <div class="col-md-6 text-end">
-                            <p><strong>Ticket:</strong> ${$(this).closest('tr').find('td:eq(9)').text()}</p>
-                            <p><strong>Usuario:</strong> ${$(this).closest('tr').find('td:eq(0)').text()}</p>
-                        </div>
-                    </div>
-                `;
-                $('#imageInfo').html(imageInfo);
-                
-                // Mostrar el modal
-                var imageModal = new bootstrap.Modal(document.getElementById('imagePreviewModal'));
-                imageModal.show();
-            });
-
-            // Filtrar los resultados (recargar la página con nuevos parámetros)
+            // Manejar el envío del formulario de filtro
             $('#filtroForm').on('submit', function (e) {
                 e.preventDefault();
                 
@@ -1058,7 +1028,6 @@ function formatFileSize($bytes) {
                 var fechaInicio = $('#fecha_inicial').val();
                 var fechaFinal = $('#fecha_final').val();
                 
-                // Construir URL con parámetros
                 var url = window.location.pathname;
                 var params = [];
                 
@@ -1070,11 +1039,10 @@ function formatFileSize($bytes) {
                     url += '?' + params.join('&');
                 }
                 
-                // Redirigir a la misma página con los nuevos filtros
                 window.location.href = url;
             });
 
-            // Configurar fechas por defecto (últimos 30 días)
+            // Configurar fechas por defecto
             var today = new Date();
             var lastMonth = new Date();
             lastMonth.setDate(today.getDate() - 30);
@@ -1082,15 +1050,12 @@ function formatFileSize($bytes) {
             var todayFormatted = today.toISOString().split('T')[0];
             var lastMonthFormatted = lastMonth.toISOString().split('T')[0];
             
-            // Solo establecer si no hay valores
             if (!$('#fecha_inicial').val()) {
                 $('#fecha_inicial').val(lastMonthFormatted);
             }
             if (!$('#fecha_final').val()) {
                 $('#fecha_final').val(todayFormatted);
             }
-            
-            <?php endif; ?>
         });
     </script>
 </body>

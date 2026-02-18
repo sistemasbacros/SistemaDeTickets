@@ -611,7 +611,7 @@
   </header>
 
   <main>
-    <a href="http://192.168.100.95/TicketBacros/M/website-menu-05/index.html" class="card soporte" aria-label="Soporte técnico">
+    <a href="http://desarollo-bacros/TicketBacros/Loginti.php" class="card soporte" aria-label="Soporte técnico">
       <div class="card-content">
         <i class="fa-solid fa-headset"></i>
         <h2>Soporte Técnico</h2>
