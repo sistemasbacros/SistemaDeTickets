@@ -1,3 +1,48 @@
+<?php
+/**
+ * @file Ticket.php
+ * @brief Plataforma ejecutiva de soporte empresarial - Vista pública de tickets.
+ *
+ * @description
+ * Dashboard ejecutivo con diseño premium para la gestión de tickets 360°.
+ * Esta es la página de entrada principal del sistema, con énfasis en
+ * presentación corporativa y experiencia de usuario de alto nivel.
+ *
+ * Características del diseño:
+ * - Tipografías ejecutivas: Barlow Semi Condensed, Inter, Playfair Display
+ * - Paleta corporativa: Navy (#0a2e5c), Blue (#1d4ed8), Accent (#3b82f6)
+ * - Optimización de carga: Preconnect a CDNs de Google Fonts
+ * - Favicon corporativo (logo2.png)
+ * - Diseño responsive y moderno
+ *
+ * Este archivo presenta una vista pública o de landing para el sistema
+ * de tickets, sin requerir autenticación inmediata.
+ *
+ * @module Módulo Principal / Landing
+ * @access Público
+ *
+ * @dependencies
+ * - CSS CDN: Font Awesome 6.5.0, Google Fonts
+ * - Assets: logo2.png (favicon)
+ *
+ * @css_variables
+ * - --primary: #0a2e5c (navy principal)
+ * - --primary-dark: #0a1f3a (navy oscuro)
+ * - --secondary: #1d4ed8 (azul secundario)
+ * - --accent: #3b82f6 (azul acento)
+ * - --light-bg: #f0f9ff (fondo claro)
+ * - --text-light: #ffffff (texto claro)
+ *
+ * @ui_design
+ * - Estilo ejecutivo/corporativo premium
+ * - Enfoque en branding BacroCorp
+ * - Título descriptivo para SEO
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 2.0
+ * @since 2024
+ */
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -611,7 +656,7 @@
   </header>
 
   <main>
-    <a href="http://desarollo-bacros/TicketBacros/Loginti.php" class="card soporte" aria-label="Soporte técnico">
+    <a href="Loginti.php" class="card soporte" aria-label="Soporte técnico">
       <div class="card-content">
         <i class="fa-solid fa-headset"></i>
         <h2>Soporte Técnico</h2>
@@ -619,7 +664,7 @@
       </div>
     </a>
 
-    <a href="http://192.168.100.95/TicketBacros/M/website-menu-05/index1.html" class="card mantenimiento" aria-label="Mantenimiento vehicular">
+    <a href="M/website-menu-05/index1.html" class="card mantenimiento" aria-label="Mantenimiento vehicular">
       <div class="card-content">
         <i class="fa-solid fa-car-side"></i>
         <h2>Mantenimiento Vehicular</h2>
@@ -627,7 +672,7 @@
       </div>
     </a>
 
-    <a href="http://192.168.100.95/TicketBacros/MenSG.php" class="card generales" aria-label="Servicios Generales">
+    <a href="MenSG.php" class="card generales" aria-label="Servicios Generales">
       <div class="card-content">
         <i class="fa-solid fa-people-carry-box"></i>
         <h2>Servicios Generales</h2>

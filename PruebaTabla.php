@@ -1,4 +1,50 @@
 <?php
+/**
+ * @file PruebaTabla.php
+ * @brief Tabla de prueba con autenticación por parámetro GET.
+ *
+ * @description
+ * Módulo de visualización de datos con control de acceso basado en
+ * parámetro GET 'newpwd'. Dependiendo de la contraseña proporcionada,
+ * muestra datos de LICITACIONES u OPERACIONES.
+ *
+ * Credenciales de acceso:
+ * - "Lic01" → Acceso a LICITACIONES
+ * - "Ope01?" → Acceso a OPERACIONES
+ *
+ * ADVERTENCIA DE SEGURIDAD: Este método de autenticación NO es seguro.
+ * Las contraseñas viajan en la URL y son visibles en logs del servidor.
+ * Se recomienda implementar autenticación real con sesión.
+ *
+ * @module Módulo de Pruebas / Reportes
+ * @access Por contraseña GET (INSEGURO)
+ *
+ * @dependencies
+ * - JS CDN: jQuery 3.5.1 + 1.11.3, DataTables 1.10.22 + 1.13.4
+ * - CSS CDN: DataTables, Bootstrap 3.3.7
+ *
+ * @inputs
+ * - GET['newpwd']: Contraseña de acceso
+ *   - "Lic01" → $value = "LICITACIONES"
+ *   - "Ope01?" → $value = "OPERACIONES"
+ *
+ * @security
+ * - ADVERTENCIA CRÍTICA: Contraseñas en URL (visible en logs)
+ * - ADVERTENCIA: Sin sanitización de parámetro GET
+ * - RECOMENDACIÓN: Migrar a autenticación por sesión
+ *
+ * @todo
+ * - Implementar autenticación segura con sesión
+ * - Remover contraseñas de URLs
+ * - Agregar CSRF protection
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.0 (desarrollo/pruebas)
+ * @since 2024
+ */
+
+require_once __DIR__ . '/config.php';
+
 $value;
 
 if ($_GET['newpwd'] == "Lic01") {
@@ -119,8 +165,8 @@ div.scroll {
 
 <?php
 
-$serverName = "LUISROMERO\SQLEXPRESS"; //serverName\instanceName
-$connectionInfo = array( "Database"=>"Operaciones", "UID"=>"larome02", "PWD"=>"larome02","CharacterSet" => "UTF-8");
+$serverName = $DB_HOST_OPERACIONES;
+$connectionInfo = array( "Database"=>$DB_DATABASE_OPERACIONES, "UID"=>$DB_USERNAME_OPERACIONES, "PWD"=>$DB_PASSWORD_OPERACIONES, "CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 // if( $conn ) {
@@ -332,8 +378,8 @@ $pruebaselect = test_input($_POST['Ncliente']);
 
 
 
-$serverName = "LUISROMERO\SQLEXPRESS"; //serverName\instanceName
-$connectionInfo = array( "Database"=>"Operaciones", "UID"=>"larome02", "PWD"=>"larome02","CharacterSet" => "UTF-8");
+$serverName = $DB_HOST_OPERACIONES;
+$connectionInfo = array( "Database"=>$DB_DATABASE_OPERACIONES, "UID"=>$DB_USERNAME_OPERACIONES, "PWD"=>$DB_PASSWORD_OPERACIONES, "CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 // if( $conn ) {

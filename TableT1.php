@@ -1,4 +1,89 @@
 <?php
+/**
+ * @file TableT1.php
+ * @brief Vista avanzada de gestión de tickets con autenticación y diseño glassmorphism.
+ *
+ * @description
+ * Módulo de visualización y gestión de tickets del Sistema de Tickets TI de BacroCorp.
+ * Presenta una interfaz moderna con diseño glassmorphism, partículas animadas de fondo
+ * y tabla interactiva DataTables para la administración de tickets de soporte técnico.
+ * 
+ * Requiere autenticación previa mediante Loginti.php. Valida la sesión del usuario
+ * antes de mostrar cualquier contenido. Incluye soporte para visualización de imágenes
+ * de evidencia mediante Lightbox2.
+ *
+ * Características principales:
+ * - Verificación de sesión con redirección automática a login
+ * - Header con información del usuario autenticado
+ * - Tabla DataTables con ordenamiento, búsqueda y paginación
+ * - Diseño dark mode con gradientes navy y efectos glass
+ * - Partículas animadas CSS en el fondo
+ * - Logo corporativo con efecto glow pulsante
+ * - Modal para ver detalles y editar tickets
+ * - Soporte para visualización de imágenes adjuntas (Lightbox)
+ * - Responsive design para dispositivos móviles
+ *
+ * @module Módulo de Gestión de Tickets
+ * @access Privado (requiere sesión activa desde Loginti.php)
+ *
+ * @dependencies
+ * - PHP: session_start()
+ * - JS CDN: Bootstrap 5.3.0-alpha1, Font Awesome 6.4.0, DataTables 1.13.4, 
+ *           SweetAlert2 11, Lightbox2 2.11.4, jQuery 3.6.0
+ * - CSS CDN: Google Fonts (Outfit, Manrope)
+ * - Interno: Loginti.php (autenticación), fetch_tickets.php (API datos),
+ *            update_ticket.php (API actualización)
+ *
+ * @database
+ * - No realiza conexiones directas a base de datos
+ * - Obtiene datos via API: fetch_tickets.php
+ * - Actualiza datos via API: update_ticket.php
+ *
+ * @session
+ * - Variables requeridas (establecidas por Loginti.php):
+ *   - $_SESSION['logged_in']     — Bandera booleana de autenticación (debe ser true)
+ *   - $_SESSION['user_name']     — Nombre completo del usuario (mostrado en header)
+ *   - $_SESSION['user_id']       — ID del empleado autenticado
+ *   - $_SESSION['user_area']     — Área/departamento del usuario
+ *   - $_SESSION['user_username'] — Nombre de usuario
+ * - Redirección: Si logged_in !== true, redirige a Loginti.php
+ *
+ * @inputs
+ * - $_SESSION (datos del usuario autenticado)
+ * - API fetch_tickets.php (datos de tickets via AJAX)
+ *
+ * @outputs
+ * - HTML: Página completa con dashboard de tickets
+ * - UI: Tabla interactiva, modales, alertas SweetAlert2
+ *
+ * @security
+ * - Verificación de sesión obligatoria antes de renderizar
+ * - Redirección inmediata si no hay sesión válida (header + exit)
+ * - Uso de operador null coalescing (??) para valores por defecto
+ * - Datos de usuario mostrados desde sesión (no desde BD directa)
+ *
+ * @ui_components
+ * - Header con logo, título y datos del usuario
+ * - Contenedor de partículas animadas (CSS puro)
+ * - Card glassmorphism principal
+ * - DataTable con columnas: ID, Solicitante, Prioridad, Asunto, Estado, Acciones
+ * - Modal de detalle/edición de ticket
+ * - Lightbox para imágenes de evidencia
+ *
+ * @css_variables
+ * - --navy-primary: #0a192f (fondo principal)
+ * - --navy-secondary: #112240 (fondo secundario)
+ * - --accent-blue: #64a8ff (acentos)
+ * - --accent-teal: #64ffda (highlights)
+ * - --glass-bg: rgba(255,255,255,0.08) (efecto glass)
+ * - --glass-border: rgba(255,255,255,0.15) (bordes glass)
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.2
+ * @since 2024
+ * @updated 2026-02-18
+ */
+
 // INICIO DE SESIÓN Y VERIFICACIÓN
 session_start();
 

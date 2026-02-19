@@ -1,4 +1,32 @@
 <?php
+/**
+ * @file AsigBien1.php
+ * @brief Módulo de asignación de bienes - Variante 1.
+ *
+ * @description
+ * Variante 1 del módulo de asignación de bienes. Procesa datos
+ * almacenados en $_SESSION['superhero'] para la gestión de
+ * asignaciones de equipos o recursos.
+ *
+ * Funcionalidad similar a AsigBien.php pero posiblemente con
+ * diferencias en el renderizado o procesamiento posterior.
+ *
+ * @module Módulo de Asignación de Bienes
+ * @access Requiere sesión activa con datos
+ *
+ * @dependencies
+ * - PHP: session_start()
+ *
+ * @session
+ * - $_SESSION['superhero']: Array con datos de asignación
+ *
+ * @see AsigBien.php, AsigBien2.php
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.0
+ * @since 2024
+ */
+
  session_start(); // this NEEDS TO BE AT THE TOP of the page before any output etc
    // echo $_SESSION['superhero'];
  
@@ -240,8 +268,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 // ////////////////// Update
 
 // ////////////////// Insert
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS"; //serverName\instanceName
-$connectionInfo = array( "Database"=>"Ticket", "UID"=>"Larome03", "PWD"=>"Larome03","CharacterSet" => "UTF-8");
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
+$connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD, "CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 

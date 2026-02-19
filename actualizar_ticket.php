@@ -1,9 +1,59 @@
 <?php
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS";
+/**
+ * @file actualizar_ticket.php
+ * @brief API para actualización de tickets de Servicios Generales (TicketsSG).
+ *
+ * @description
+ * Endpoint de API que maneja actualizaciones de tickets del módulo de
+ * Servicios Generales. Recibe datos vía POST y actualiza el registro
+ * correspondiente en la tabla TicketsSG.
+ *
+ * Este archivo es diferente a update_ticket.php que trabaja con la tabla T3.
+ * actualizar_ticket.php trabaja específicamente con tickets de Servicios Generales.
+ *
+ * Operaciones:
+ * - Asignación de ticket a personal (asignadoA)
+ * - Cambio de estatus del ticket
+ * - Soporte para subida de archivos (si existe)
+ *
+ * @module API de Servicios Generales
+ * @access API (POST request)
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension, json_encode
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tabla: TicketsSG (UPDATE)
+ *
+ * @inputs
+ * - POST['ticketId']: ID del ticket a actualizar (requerido)
+ * - POST['asignadoA']: Persona asignada (requerido)
+ * - POST['nuevoEstatus']: Nuevo estado del ticket (requerido)
+ * - FILES: Archivos adjuntos (opcional)
+ *
+ * @outputs
+ * - JSON: {"success": true/false, "message": "..."}
+ * - O {"error": "descripción del error"}
+ *
+ * @security
+ * - Validación de campos requeridos
+ * - Sin autenticación de sesión (añadir recomendado)
+ * - Errores de SQL pueden exponerse vía JSON
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.5
+ * @since 2024
+ */
+
+require_once __DIR__ . '/config.php';
+
+$serverName = $DB_HOST;
 $connectionInfo = array(
-    "Database" => "Ticket",
-    "UID" => "Larome03",
-    "PWD" => "Larome03",
+    "Database" => $DB_DATABASE,
+    "UID" => $DB_USERNAME,
+    "PWD" => $DB_PASSWORD,
     "CharacterSet" => "UTF-8"
 );
 

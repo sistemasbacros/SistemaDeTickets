@@ -1,4 +1,46 @@
 <?php
+/**
+ * @file AsigBien.php
+ * @brief Módulo de asignación de bienes con datos de sesión.
+ *
+ * @description
+ * Componente que procesa datos almacenados en la variable de sesión
+ * $_SESSION['superhero'] para gestión de asignación de bienes.
+ * Extrae los valores de la sesión a un array local para su procesamiento.
+ *
+ * Este archivo es parte de un flujo multi-paso donde los datos se
+ * almacenan temporalmente en la sesión entre páginas.
+ *
+ * Nota: El nombre 'superhero' de la variable de sesión parece ser un
+ * placeholder de desarrollo; considerar renombrar a algo más descriptivo.
+ *
+ * Variantes relacionadas:
+ * - AsigBien1.php: Variante 1 del proceso
+ * - AsigBien2.php: Variante 2 del proceso
+ *
+ * @module Módulo de Asignación de Bienes
+ * @access Requiere sesión activa con datos
+ *
+ * @dependencies
+ * - PHP: session_start()
+ *
+ * @session
+ * - $_SESSION['superhero']: Array con datos para asignación
+ *   Los datos se extraen a $array1 para procesamiento local
+ *
+ * @variables
+ * - $array1: Array local con valores de la sesión
+ *
+ * @todo
+ * - Renombrar $_SESSION['superhero'] a nombre descriptivo
+ * - Agregar validación de datos de sesión
+ * - Documentar estructura esperada del array
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.0
+ * @since 2024
+ */
+
  session_start(); // this NEEDS TO BE AT THE TOP of the page before any output etc
    // echo $_SESSION['superhero'];
  
@@ -47,7 +89,7 @@ array_push($array1,$valor);
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Ticket soporte TI</title>  <a href="http://192.168.100.95/TicketBacros/M/website-menu-05/index.html" style="color:black;font-size:20px;font-weight: bold;" >INICIO</a>
+    <title>Ticket soporte TI</title>  <a href="M/website-menu-05/index.html" style="color:black;font-size:20px;font-weight: bold;" >INICIO</a>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
@@ -242,8 +284,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 // ////////////////// Update
 
 // ////////////////// Insert
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS"; //serverName\instanceName
-$connectionInfo = array( "Database"=>"Ticket", "UID"=>"Larome03", "PWD"=>"Larome03","CharacterSet" => "UTF-8");
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
+$connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 

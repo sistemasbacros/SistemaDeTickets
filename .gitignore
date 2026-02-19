@@ -1,3 +1,37 @@
-uploads/1757095243_Logo2.png
-uploads/1758648625_M__nu31.png
-uploads/ticket__1758567501.png
+# ============================================
+# SistemaDeTickets - .gitignore
+# ============================================
+
+# Documentación interna de Claude Code
+CLAUDE.md
+
+# Variables de entorno (contienen credenciales)
+.env
+
+# Archivos subidos por usuarios
+uploads/
+
+# Logs de Nginx y PHP
+nginx/logs/
+*.log
+
+# Dependencias de Composer (si se agregan en el futuro)
+vendor/
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs y editores
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Caché de PHP y opcache
+*.cache
+
+# Archivos temporales
+tmp/
+temp/

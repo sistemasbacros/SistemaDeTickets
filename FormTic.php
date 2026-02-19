@@ -1,3 +1,43 @@
+<?php
+/**
+ * @file FormTic.php
+ * @brief Formulario de creación de tickets de soporte TI (versión ligera).
+ *
+ * @description
+ * Formulario simplificado para la creación de tickets de soporte de TI.
+ * Presenta una interfaz moderna con diseño degradado claro, optimizada
+ * para captura rápida de incidencias sin requerir autenticación previa.
+ *
+ * Características:
+ * - Diseño limpio con gradiente light (#f0f0f0 → #dcdcdc)
+ * - Tipografía Inter de Google Fonts
+ * - Iconos Font Awesome 5.15.4
+ * - Alertas con SweetAlert2
+ * - Sin verificación de sesión (formulario público)
+ * - Campos: Nombre, Email, Prioridad, Asunto, Descripción
+ *
+ * Nota: Este es un formulario más simple que FormTic1.php, sin las
+ * funcionalidades avanzadas de subida de imágenes y verificación.
+ *
+ * @module Módulo de Tickets TI
+ * @access Público (sin autenticación)
+ *
+ * @dependencies
+ * - JS CDN: Font Awesome 5.15.4, SweetAlert2 11
+ * - CSS CDN: Google Fonts (Inter)
+ * - Backend: Consultadata.php (si procesa datos)
+ *
+ * @ui_components
+ * - Formulario centrado con campos de entrada
+ * - Selectores de prioridad
+ * - Área de texto para descripción
+ * - Botón de envío
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.0
+ * @since 2024
+ */
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -253,7 +293,7 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
   document.getElementById("homeButton").addEventListener("click", function() {
-    window.location.href = "http://192.168.100.95/TicketBacros/M/website-menu-05/index.html";
+    window.location.href = "M/website-menu-05/index.html";
   });
 
   function pad(n) { return n < 10 ? '0' + n : n; }
@@ -282,13 +322,10 @@
 require 'PHPMailer/src/PHPMailer.php';
 require 'PHPMailer/src/SMTP.php';
 require 'PHPMailer/src/Exception.php';
+require_once __DIR__ . '/config.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-
-// Configuración de correos
-define('ADMIN_EMAIL', 'tickets@bacrocorp.com');
-define('ADMIN_NAME', 'Administrador TI BacroCorp');
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $name1 = test_input($_POST["Nombre"]);
@@ -301,10 +338,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $name8 = test_input($_POST["fecha"]);
   $name9 = test_input($_POST["Hora"]);
   $name10 = test_input($_POST["tik"]);
-  
+
   // Insertar en la base de datos
-  $serverName = "DESAROLLO-BACRO\SQLEXPRESS";
-  $connectionInfo = array( "Database"=>"Ticket", "UID"=>"Larome03", "PWD"=>"Larome03","CharacterSet" => "UTF-8");
+  $serverName = $DB_HOST;
+  $connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8");
   $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
   if ($conn) {
@@ -362,14 +399,7 @@ function sendUserConfirmationEmail($name, $email, $priority, $department, $subje
     $mail = new PHPMailer(true);
     
     // Configuración del servidor SMTP
-    $mail->isSMTP();
-    $mail->Host = 'smtp.office365.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = 'tickets@bacrocorp.com';
-    $mail->Password = 'XTqzA0GkA#';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-    $mail->CharSet = 'UTF-8';
+    configurarSMTP($mail);
     
     // Destinatarios
     $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
@@ -395,14 +425,7 @@ function sendAdminNotificationEmail($name, $email, $priority, $department, $subj
     $mail = new PHPMailer(true);
     
     // Configuración del servidor SMTP
-    $mail->isSMTP();
-    $mail->Host = 'smtp.office365.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = 'tickets@bacrocorp.com';
-    $mail->Password = 'XTqzA0GkA#';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-    $mail->CharSet = 'UTF-8';
+    configurarSMTP($mail);
     
     // Destinatarios
     $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
@@ -816,7 +839,7 @@ function showSuccessAlert($name, $email, $ticketId, $userEmailSent, $adminEmailS
       confirmButtonText: "Volver al Inicio",
       allowOutsideClick: false
   }).then((result) => {
-      window.location.href = "http://192.168.100.95/TicketBacros/M/website-menu-05/index.html";
+      window.location.href = "M/website-menu-05/index.html";
   });
   </script>';
 }
@@ -844,7 +867,7 @@ function showWarningAlert($ticketId, $error) {
       confirmButtonText: "Volver al Inicio",
       allowOutsideClick: false
   }).then((result) => {
-      window.location.href = "http://192.168.100.95/TicketBacros/M/website-menu-05/index.html";
+      window.location.href = "M/website-menu-05/index.html";
   });
   </script>';
 }

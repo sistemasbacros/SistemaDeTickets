@@ -1,13 +1,96 @@
 
 
 <?php
+/**
+ * @file Consultadata.php
+ * @brief Módulo de conexiones a bases de datos y consultas compartidas del sistema.
+ *
+ * @description
+ * Archivo de configuración y conexión a las múltiples bases de datos utilizadas
+ * por el Sistema de Tickets. Establece las conexiones a SQL Server y proporciona
+ * consultas base que son reutilizadas por otros módulos del sistema.
+ *
+ * Este archivo implementa:
+ * - Conexión a servidor comercial (datos de contactos)
+ * - Conexión a servidor de tickets (datos operativos)
+ * - Consultas base para obtener listados de contactos
+ * - Arrays de datos precargados para formularios
+ *
+ * Servidores configurados:
+ * 1. WIN-44O80L37Q7M\COMERCIAL → BASENUEVA (datos comerciales/contactos)
+ * 2. DESAROLLO-BACRO\SQLEXPRESS → Ticket (datos de tickets)
+ *
+ * Nota de seguridad: Las credenciales están hardcoded en este archivo.
+ * Se recomienda migrar a variables de entorno (.env) para mayor seguridad
+ * en ambientes de producción.
+ *
+ * @module Módulo de Datos / Conexiones
+ * @access Interno (incluido por otros archivos PHP)
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension (Microsoft SQL Server Driver for PHP)
+ * - Drivers: ODBC Driver 17 for SQL Server
+ *
+ * @database
+ * - Conexión 1 ($conn1):
+ *   - Servidor: WIN-44O80L37Q7M\COMERCIAL
+ *   - Base de datos: BASENUEVA
+ *   - Usuario: SA
+ *   - Uso: Consulta de contactos comerciales (vwLBSContactList)
+ * 
+ * - Conexión 2 ($conn):
+ *   - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ *   - Base de datos: Ticket
+ *   - Usuario: Larome03
+ *   - Uso: Operaciones CRUD de tickets (T3, TicketsSG, etc.)
+ *
+ * @variables_globales
+ * - $conn1: Recurso de conexión a servidor comercial
+ * - $conn: Recurso de conexión a servidor de tickets
+ * - $array_tot1: Array con nombres de contactos (ContactName)
+ * - $serverName1, $serverName: Nombres de los servidores
+ * - $connectionInfo1, $connectionInfo: Arrays de configuración de conexión
+ *
+ * @queries
+ * - Consulta de contactos:
+ *   SELECT ContactName, NickName, MainAddress FROM [dbo].[vwLBSContactList]
+ *   → Resultado almacenado en $array_tot1 para autocompletar formularios
+ *
+ * @usage
+ * Incluir este archivo en otros módulos que requieran acceso a BD:
+ * include 'Consultadata.php';
+ * // Usar $conn para queries a Ticket
+ * // Usar $conn1 para queries a BASENUEVA
+ * // Usar $array_tot1 para listado de contactos
+ *
+ * @security
+ * - ADVERTENCIA: Credenciales hardcoded (migrar a .env recomendado)
+ * - Conexiones establecidas con CharacterSet UTF-8
+ * - No hay sanitización de queries en este archivo (responsabilidad del caller)
+ *
+ * @error_handling
+ * - Código de manejo de errores comentado (descomentar para debug)
+ * - sqlsrv_errors() disponible para diagnóstico
+ *
+ * @todo
+ * - Migrar credenciales a variables de entorno
+ * - Implementar singleton para conexiones
+ * - Añadir manejo de errores robusto
+ * - Considerar connection pooling
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.5
+ * @since 2024
+ * @updated 2025-01-10
+ */
 
 
 
 
 
-$serverName1 = "WIN-44O80L37Q7M\COMERCIAL"; //serverName\instanceName
-$connectionInfo1 = array( "Database"=>"BASENUEVA", "UID"=>"SA", "PWD"=>"Administrador1*","CharacterSet" => "UTF-8");
+require_once __DIR__ . '/config.php';
+$serverName1 = $DB_HOST_COMERCIAL;
+$connectionInfo1 = array( "Database"=>$DB_DATABASE_COMERCIAL, "UID"=>$DB_USERNAME_COMERCIAL, "PWD"=>$DB_PASSWORD_COMERCIAL,"CharacterSet" => "UTF-8");
 $conn1 = sqlsrv_connect( $serverName1, $connectionInfo1);
 
 /////Query ordenes de cancelación de alimentos.
@@ -27,8 +110,8 @@ array_push($array_tot1,$row['ContactName']);
 
 
 
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS"; //serverName\instanceName
-$connectionInfo = array( "Database"=>"Ticket", "UID"=>"Larome03", "PWD"=>"Larome03","CharacterSet" => "UTF-8");
+$serverName = $DB_HOST;
+$connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 // if( $conn ) {
@@ -306,7 +389,7 @@ function test_input($data) {
   
     document.getElementById("homeButton").addEventListener("click", function() {
   // Reemplaza "index.html" con la ruta a tu p谩gina de inicio
-  window.location.href = "http://desarollo-bacros/TicketBacros/MenSG.php";
+  window.location.href = "MenSG.php";
 });
 
   	var dataQ1 = <?php echo json_encode($array_tot1);?>;

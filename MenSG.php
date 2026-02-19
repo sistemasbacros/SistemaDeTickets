@@ -1,3 +1,46 @@
+<?php
+/**
+ * @file MenSG.php
+ * @brief Menú principal del módulo de Servicios Generales.
+ *
+ * @description
+ * Página de navegación principal para el módulo de Servicios Generales.
+ * Presenta un menú lateral (sidenav) con acceso a las diferentes
+ * funcionalidades: crear ticket, consultar tickets, reportes, etc.
+ *
+ * Características de diseño:
+ * - Sidebar lateral colapsable (250px)
+ * - Fondo del sidebar: #2e3b4e (navy/slate)
+ * - Tipografía Open Sans de Google Fonts
+ * - Bootstrap 4.6.0 para layout
+ * - Font Awesome 6.0.0 para iconos
+ * - Sidebar inicia oculto (left: -250px)
+ *
+ * Opciones del menú:
+ * - Dashboard de Servicios Generales
+ * - Crear nuevo ticket
+ * - Consultar tickets existentes
+ * - Reportes y estadísticas
+ * - Configuración (si aplica)
+ *
+ * @module Módulo de Servicios Generales
+ * @access Público
+ *
+ * @dependencies
+ * - CSS CDN: Google Fonts (Open Sans), Font Awesome 6.0.0, Bootstrap 4.6.0
+ * - JS CDN: Bootstrap 4 (para collapsar sidebar)
+ *
+ * @ui_components
+ * - Sidenav lateral con animación de apertura
+ * - Área principal de contenido
+ * - Botón hamburger para toggle del menú
+ * - Links de navegación con iconos
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.0
+ * @since 2024
+ */
+?>
 <!doctype html>
 <html lang="es">
 <head>
@@ -174,10 +217,10 @@
   <nav class="sidenav" id="sidenav" aria-label="Sidebar navigation">
   <br>
   <br>
-    <a href="http://192.168.100.95/TicketBacros/Ticket.php"><i class="fas fa-home"></i> INICIO</a>
+    <a href="Ticket.php"><i class="fas fa-home"></i> INICIO</a>
     <a href="FormSG.php"><i class="fas fa-plus-circle"></i> LEVANTA TU TICKET</a>
     <a href="Consultadata.php"><i class="fas fa-cogs"></i> ESTATUS DE TU TICKET</a>
-    <a href="http://192.168.100.95/TicketBacros/Login_Procesar.php"><i class="fas fa-user-cog"></i> PROCESAR TICKETS</a>
+    <a href="Login_Procesar.php"><i class="fas fa-user-cog"></i> PROCESAR TICKETS</a>
   </nav>
 
   <!-- Sección principal -->

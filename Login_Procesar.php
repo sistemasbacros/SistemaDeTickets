@@ -1,3 +1,39 @@
+<?php
+/**
+ * @file Login_Procesar.php
+ * @brief Página de login corporativo con diseño animado.
+ *
+ * @description
+ * Formulario de login alternativo con diseño moderno y gradiente
+ * animado en el fondo. Este archivo parece ser una versión diferente
+ * o de prueba del sistema de login (comparar con Loginti.php).
+ *
+ * Características de diseño:
+ * - Gradiente animado multi-color (#f8f8f8, #004d7a, #006699)
+ * - Animación CSS de 15 segundos
+ * - Diseño centrado verticalmente
+ * - Tipografía Segoe UI
+ *
+ * @module Módulo de Autenticación
+ * @access Público
+ *
+ * @dependencies
+ * - CSS: Estilos inline con animaciones
+ *
+ * @ui_components
+ * - Fondo con gradiente animado (gradientMove)
+ * - Formulario de login
+ *
+ * @css_animations
+ * - gradientMove: Anima background-position 0% → 100% → 0% en 15s
+ *
+ * @see Loginti.php
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.0
+ * @since 2024
+ */
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -115,7 +151,7 @@
         message.style.color = "green";
         message.textContent = "¡Login exitoso! Redirigiendo...";
         setTimeout(() => {
-          window.location.href = "http://192.168.100.95/TicketBacros/Asignarticket.php";
+          window.location.href = "Asignarticket.php";
         }, 1500);
       } else {
         message.style.color = "red";

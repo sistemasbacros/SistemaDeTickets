@@ -1,4 +1,117 @@
 <?php
+/**
+ * @file IniSoport.php
+ * @brief Dashboard principal del Sistema de Tickets con métricas SLA y gestión de permisos.
+ *
+ * @description
+ * Módulo central post-autenticación que actúa como hub principal del sistema.
+ * Presenta un dashboard ejecutivo con métricas de SLA (Service Level Agreement),
+ * estadísticas de tickets por estado/prioridad, y acceso controlado por roles
+ * a las diferentes funcionalidades del sistema.
+ *
+ * Este archivo implementa:
+ * - Sistema de permisos por usuario (whitelist de usernames)
+ * - Verificación exhaustiva de sesión con múltiples parámetros
+ * - Cálculo de métricas SLA (tickets dentro/fuera de tiempo)
+ * - Dashboard visual con contadores, gráficos y tablas resumen
+ * - Exportación a Excel de datos de tickets
+ * - Menú lateral con navegación a módulos del sistema
+ *
+ * Módulos accesibles desde este dashboard:
+ * - Tickets TI: Creación, consulta y gestión
+ * - Servicios Generales: Tickets de mantenimiento
+ * - Soporte: Tickets de soporte técnico
+ * - Dashboard (restringido): Métricas avanzadas SLA
+ * - Vehículos: Gestión de mantenimiento vehicular
+ * - Contratos: Catálogo de contratos
+ *
+ * @module Módulo Principal / Dashboard
+ * @access Privado (requiere sesión activa desde Loginti.php)
+ *
+ * @dependencies
+ * - PHP: session, sqlsrv extension, output buffering
+ * - JS CDN: Bootstrap 5.3.0-alpha1, Chart.js 3.9.1, DataTables 1.13.4,
+ *           SweetAlert2 11, Font Awesome 6.4.0, jQuery 3.6.0
+ * - CSS CDN: Google Fonts (Outfit, Manrope), Animate.css
+ * - Interno: PHPMailer (notificaciones), Consultadata.php (conexiones BD)
+ * - Externo: PhpSpreadsheet (exportación Excel)
+ *
+ * @database
+ * - Servidor primario: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tablas consultadas:
+ *   - T3: Tickets TI (principal)
+ *   - TicketsSG: Tickets Servicios Generales
+ * - Consultas:
+ *   - Conteo por estado (Abierto, Resuelto, En Proceso, Cerrado)
+ *   - Conteo por prioridad (Alta, Media, Baja, Crítica)
+ *   - Tickets por usuario/área
+ *   - Cálculo de tiempos SLA
+ *
+ * @session
+ * - Variables requeridas (desde Loginti.php):
+ *   - $_SESSION['logged_in']       — Bandera de autenticación
+ *   - $_SESSION['user_name']       — Nombre del usuario
+ *   - $_SESSION['user_id']         — ID del empleado
+ *   - $_SESSION['user_area']       — Área del usuario
+ *   - $_SESSION['user_username']   — Username (para verificar permisos)
+ *   - $_SESSION['client_ip']       — IP vinculada a sesión
+ *   - $_SESSION['login_time']      — Timestamp de inicio de sesión
+ *   - $_SESSION['last_activity']   — Última actividad
+ * - Validaciones:
+ *   - Sesión activa (logged_in === true)
+ *   - IP consistente (client_ip === REMOTE_ADDR)
+ *   - Tiempo de sesión máximo (8 horas)
+ *   - Inactividad máxima (30 minutos)
+ *
+ * @inputs
+ * - $_SESSION (datos del usuario autenticado)
+ * - $_GET (opcional): filtros de fecha, área, estado
+ * - Database: Estadísticas calculadas de tablas T3 y TicketsSG
+ *
+ * @outputs
+ * - HTML: Dashboard completo con métricas y navegación
+ * - JSON: Datos para gráficos Chart.js via AJAX
+ * - Excel: Exportación de reportes (endpoint interno)
+ *
+ * @security
+ * - Verificación de sesión multicapa
+ * - Lista blanca de usuarios para dashboard avanzado
+ * - Lista blanca de usuarios para procesar tickets
+ * - Vinculación de sesión a IP
+ * - Headers anti-cache completos
+ * - Protección contra clickjacking (X-Frame-Options)
+ * - Regeneración de token CSRF cuando es necesario
+ *
+ * @permissions
+ * - $usuariosPermitidosDashboard: ['luis.vargas', 'alfredo.rosales', 'luis.romero', 'ariel.antonio']
+ *   → Acceso a métricas SLA avanzadas y estadísticas
+ * - $usuariosPermitidosProcesar: ['luis.vargas', 'alfredo.rosales', 'luis.romero', 'ariel.antonio']
+ *   → Capacidad de cambiar estado de tickets
+ * - Usuarios sin permisos especiales: Solo visualización básica
+ *
+ * @ui_components
+ * - Header con logo, título y perfil de usuario
+ * - Sidebar colapsable con navegación a módulos
+ * - Cards métricas: Total tickets, Abiertos, En Proceso, Resueltos
+ * - Gráficos Chart.js: Tickets por estado, por prioridad, tendencia temporal
+ * - Tabla resumen de tickets recientes
+ * - Footer con información del sistema
+ * - Diseño glassmorphism con tema navy oscuro
+ *
+ * @sla_metrics
+ * - Crítica: 2 horas máximo de respuesta
+ * - Alta: 4 horas máximo de respuesta
+ * - Media: 8 horas máximo de respuesta
+ * - Baja: 24 horas máximo de respuesta
+ * - Cálculo: % tickets dentro de SLA vs fuera de SLA
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 3.2
+ * @since 2024
+ * @updated 2025-02-06
+ */
+
 // VERIFICACIÓN DE SESIÓN MEJORADA - VERSIÓN FINAL CON TODAS LAS VARIANTES DE PRIORIDAD
 session_start();
 
@@ -97,11 +210,12 @@ if (isset($_POST['logout'])) {
     exit();
 }
 
-$serverName = "DESAROLLO-BACRO\\SQLEXPRESS";
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
 $connectionOptions = array(
-    "Database" => "Ticket",
-    "UID" => "Larome03", 
-    "PWD" => "Larome03",
+    "Database" => $DB_DATABASE,
+    "UID" => $DB_USERNAME,
+    "PWD" => $DB_PASSWORD,
     "CharacterSet" => "UTF-8",
     "TrustServerCertificate" => true,
     "LoginTimeout" => 30
@@ -1019,9 +1133,9 @@ $iniciales = substr($nombre, 0, 2);
   <nav id="sidebar">
     <div class="sidebar-header"><div class="sidebar-logo">BACROCORP</div><div class="sidebar-subtitle">Sistema de Soporte</div></div>
     <?php if ($tienePermisosDashboard): ?><a href="#" class="nav-link" data-page="dashboard"><i class="fas fa-home"></i>INICIO</a><?php else: ?><a href="#" class="nav-link disabled" data-page="dashboard"><i class="fas fa-home"></i>INICIO</a><?php endif; ?>
-    <a href="#" class="nav-link" data-page="levantar-ticket" data-link="http://desarollo-bacros/TicketBacros/Formtic1.php"><i class="fas fa-ticket-alt"></i>LEVANTAR TICKET</a>
-    <a href="#" class="nav-link" data-page="revisar-tickets" data-link="http://desarollo-bacros/TicketBacros/RevisarT.php"><i class="fas fa-eye"></i>REVISAR TICKETS</a>
-    <?php if (in_array($usuarioActual, $usuariosPermitidosProcesar)): ?><a href="#" class="nav-link" data-page="procesar-tickets" data-link="http://desarollo-bacros/TicketBacros/TableT1.php"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a><?php else: ?><a href="#" class="nav-link disabled" data-page="procesar-tickets" data-link="http://desarollo-bacros/TicketBacros/TableT1.php"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a><?php endif; ?>
+    <a href="#" class="nav-link" data-page="levantar-ticket" data-link="Formtic1.php"><i class="fas fa-ticket-alt"></i>LEVANTAR TICKET</a>
+    <a href="#" class="nav-link" data-page="revisar-tickets" data-link="RevisarT.php"><i class="fas fa-eye"></i>REVISAR TICKETS</a>
+    <?php if (in_array($usuarioActual, $usuariosPermitidosProcesar)): ?><a href="#" class="nav-link" data-page="procesar-tickets" data-link="TableT1.php"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a><?php else: ?><a href="#" class="nav-link disabled" data-page="procesar-tickets" data-link="TableT1.php"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a><?php endif; ?>
     <?php if ($tienePermisosDashboard): ?><a href="#" class="nav-link active" data-page="reportes"><i class="fas fa-chart-line"></i>REPORTES</a><?php else: ?><a href="#" class="nav-link disabled" data-page="reportes"><i class="fas fa-chart-line"></i>REPORTES</a><?php endif; ?>
     <div class="theme-toggle"><button class="theme-toggle-btn" id="themeToggle"><i class="fas fa-sun"></i> MODO CLARO</button></div>
     <div style="padding: 0 var(--spacing-md);"><button type="button" class="logout-btn" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> CERRAR SESIÓN</button></div>
@@ -2039,9 +2153,9 @@ $iniciales = substr($nombre, 0, 2);
         const dashboardContent = document.getElementById('dashboardContent');
         const pageConfig = {
             'dashboard': { showModule: false, title: 'Dashboard de Reportes', mainTitle: 'Bienvenido, <?php echo htmlspecialchars($nombre); ?>', subtitle: 'Dashboard personalizado del sistema de soporte técnico con métricas 3D', permissionRequired: true, allowedUsers: <?php echo json_encode($usuariosPermitidosDashboard); ?> },
-            'levantar-ticket': { showModule: true, url: 'http://desarollo-bacros/TicketBacros/Formtic1.php', title: 'Levantar Ticket', mainTitle: 'Formulario de Tickets', subtitle: 'Complete el formulario para crear un nuevo ticket de soporte' },
-            'revisar-tickets': { showModule: true, url: 'http://desarollo-bacros/TicketBacros/RevisarT.php', title: 'Revisar Tickets', mainTitle: 'Revisión de Tickets', subtitle: 'Revise y gestione los tickets asignados' },
-            'procesar-tickets': { showModule: true, url: 'http://desarollo-bacros/TicketBacros/TableT1.php', title: 'Procesar Tickets', mainTitle: 'Procesamiento de Tickets', subtitle: 'Procese y actualice el estado de los tickets', permissionRequired: true, allowedUsers: <?php echo json_encode($usuariosPermitidosProcesar); ?> },
+            'levantar-ticket': { showModule: true, url: 'Formtic1.php', title: 'Levantar Ticket', mainTitle: 'Formulario de Tickets', subtitle: 'Complete el formulario para crear un nuevo ticket de soporte' },
+            'revisar-tickets': { showModule: true, url: 'RevisarT.php', title: 'Revisar Tickets', mainTitle: 'Revisión de Tickets', subtitle: 'Revise y gestione los tickets asignados' },
+            'procesar-tickets': { showModule: true, url: 'TableT1.php', title: 'Procesar Tickets', mainTitle: 'Procesamiento de Tickets', subtitle: 'Procese y actualice el estado de los tickets', permissionRequired: true, allowedUsers: <?php echo json_encode($usuariosPermitidosProcesar); ?> },
             'reportes': { showModule: false, title: 'Dashboard de Reportes', mainTitle: 'Reportes de Tickets', subtitle: 'Dashboard con métricas 3D y cumplimiento SLA', permissionRequired: true, allowedUsers: <?php echo json_encode($usuariosPermitidosDashboard); ?> }
         };
         

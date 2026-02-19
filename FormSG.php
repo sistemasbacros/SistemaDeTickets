@@ -1,3 +1,50 @@
+<?php
+/**
+ * @file FormSG.php
+ * @brief Formulario de creación de tickets para Servicios Generales.
+ *
+ * @description
+ * Formulario de captura de tickets del módulo de Servicios Generales.
+ * Permite a los usuarios reportar solicitudes de mantenimiento, limpieza,
+ * reparaciones y otros servicios generales de la empresa.
+ *
+ * Este formulario es similar en estructura a FormTic.php pero está
+ * orientado a solicitudes de servicios no relacionados con TI.
+ *
+ * Características:
+ * - Diseño limpio con gradiente gris claro
+ * - Tipografía Inter de Google Fonts
+ * - Sin autenticación requerida
+ * - Campos específicos para servicios generales
+ * - Fondo posicionable para logo corporativo
+ *
+ * Tipos de solicitudes típicas:
+ * - Mantenimiento de instalaciones
+ * - Limpieza de áreas
+ * - Reparaciones menores
+ * - Solicitudes de mobiliario
+ * - Servicios de jardinería
+ *
+ * @module Módulo de Servicios Generales
+ * @access Público (sin autenticación)
+ *
+ * @dependencies
+ * - CSS CDN: Google Fonts (Inter)
+ * - Backend: procesa datos a tabla TicketsSG
+ *
+ * @database
+ * - Tabla destino: TicketsSG (diferente a T3 de TI)
+ *
+ * @ui_components
+ * - Container blanco centrado
+ * - Campos de formulario estándar
+ * - Botón de envío
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.0
+ * @since 2024
+ */
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -248,7 +295,7 @@
   
   document.getElementById("homeButton").addEventListener("click", function() {
   // Reemplaza "index.html" con la ruta a tu página de inicio
-  window.location.href = "http://desarollo-bacros/TicketBacros/MenSG.php";
+  window.location.href = "MenSG.php";
 });
     // Fecha y hora automáticas
     function pad(n) { return n < 10 ? '0' + n : n; }
@@ -282,8 +329,9 @@
 
 <?php
 
-$serverName1 = "WIN-44O80L37Q7M\COMERCIAL"; //serverName\instanceName
-$connectionInfo1 = array( "Database"=>"BASENUEVA", "UID"=>"SA", "PWD"=>"Administrador1*","CharacterSet" => "UTF-8");
+require_once __DIR__ . '/config.php';
+$serverName1 = $DB_HOST_COMERCIAL;
+$connectionInfo1 = array( "Database"=>$DB_DATABASE_COMERCIAL, "UID"=>$DB_USERNAME_COMERCIAL, "PWD"=>$DB_PASSWORD_COMERCIAL,"CharacterSet" => "UTF-8");
 $conn1 = sqlsrv_connect( $serverName1, $connectionInfo1);
 
 /////Query ordenes de cancelación de alimentos.
@@ -319,8 +367,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   
 
 
-  $serverName = "DESAROLLO-BACRO\SQLEXPRESS";
-  $connectionInfo = array("Database"=>"Ticket", "UID"=>"Larome03", "PWD"=>"Larome03","CharacterSet" => "UTF-8");
+  $serverName = $DB_HOST;
+  $connectionInfo = array("Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8");
   $conn = sqlsrv_connect($serverName, $connectionInfo);
 
   $sql = "INSERT INTO TicketsSG  ([Nombre], [Prioridad], [Empresa], [Asunto], [Mensaje], [Adjuntos], [Fecha], [Hora], [Id_Ticket], [Estatus], [PA])

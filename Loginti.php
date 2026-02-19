@@ -1,4 +1,116 @@
 <?php
+/**
+ * @file Loginti.php
+ * @brief Sistema de autenticación centralizado para el Sistema de Tickets BacroCorp.
+ *
+ * @description
+ * Módulo principal de autenticación que implementa login seguro con múltiples
+ * capas de protección. Gestiona el inicio de sesión de usuarios consultando
+ * la base de datos de empleados y establece una sesión segura con tokens CSRF,
+ * vinculación de IP y tiempos de expiración configurables.
+ *
+ * Este archivo actúa como punto de entrada único (Single Entry Point) para
+ * todos los módulos del sistema que requieren autenticación. Implementa
+ * un diseño moderno glassmorphism con efectos visuales animados.
+ *
+ * Características de seguridad implementadas:
+ * - Token CSRF único por sesión (32 bytes aleatorios)
+ * - Vinculación de sesión a IP del cliente (session hijacking protection)
+ * - Cookies HttpOnly, SameSite=Strict
+ * - Headers anti-cache para prevenir almacenamiento de credenciales
+ * - Headers de seguridad: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection
+ * - Timeout de sesión: 8 horas máximo, 30 minutos de inactividad
+ * - Regeneración de ID de sesión en cada login exitoso
+ * - Validación de token de origen para peticiones POST
+ * - Output buffering para prevenir header injection
+ *
+ * Flujo de autenticación:
+ * 1. Usuario accede → Se genera token CSRF y token de origen
+ * 2. POST con credenciales → Validación de tokens CSRF y origen
+ * 3. Consulta a BD → Verifica usuario y contraseña en Comedor.dbo.tbempleado
+ * 4. Login exitoso → Regenera session_id, establece variables de sesión
+ * 5. Redirección → IniSoport.php (dashboard principal)
+ *
+ * @module Módulo de Autenticación
+ * @access Público (punto de entrada de login)
+ *
+ * @dependencies
+ * - PHP: session, output buffering, sqlsrv extension
+ * - JS CDN: SweetAlert2 11 (alertas de error/éxito)
+ * - CSS: Estilos inline glassmorphism, Font Awesome (iconos)
+ * - Destino: IniSoport.php (post-login redirect)
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS (puerto 1433)
+ * - Base de datos: Comedor
+ * - Tabla: dbo.tbempleado
+ * - Columnas consultadas: nombre, username, id_empleado, area, contra
+ * - Autenticación: UID=sa, PWD=configurado
+ *
+ * @session
+ * - Genera (si no existe):
+ *   - $_SESSION['csrf_token']      — Token CSRF (64 chars hex)
+ *   - $_SESSION['origin_token']    — Token de origen para double-submit
+ * - Establece (post-login exitoso):
+ *   - $_SESSION['logged_in']       — true (bandera de autenticación)
+ *   - $_SESSION['user_id']         — ID del empleado (int)
+ *   - $_SESSION['user_name']       — Nombre completo del usuario
+ *   - $_SESSION['user_area']       — Área/departamento del usuario
+ *   - $_SESSION['user_username']   — Username de login
+ *   - $_SESSION['client_ip']       — IP del cliente (vinculación)
+ *   - $_SESSION['login_time']      — Timestamp de login (Unix)
+ *   - $_SESSION['last_activity']   — Timestamp última actividad
+ * - Configuración de sesión PHP:
+ *   - session.cookie_httponly = 1
+ *   - session.cookie_samesite = Strict
+ *   - session.use_strict_mode = 1
+ *   - session.use_only_cookies = 1
+ *
+ * @inputs
+ * - POST: username, password, csrf_token, origin_token (desde formulario)
+ * - COOKIE: PHPSESSID (sesión PHP)
+ * - SERVER: REMOTE_ADDR (IP del cliente)
+ *
+ * @outputs
+ * - HTML: Formulario de login con diseño glassmorphism
+ * - Redirect: Header Location a IniSoport.php (login exitoso)
+ * - JS: Alertas SweetAlert2 para errores de autenticación
+ *
+ * @security
+ * - CSRF Protection: Token validation en cada POST
+ * - Double-Submit Cookie: origin_token validation
+ * - Session Fixation: session_regenerate_id(true) post-login
+ * - IP Binding: Sesión vinculada a IP del cliente
+ * - Timing Attack: No se revela si usuario existe (mensaje genérico)
+ * - SQL Injection: Uso de parámetros en consultas (aunque mejorable)
+ * - XSS: Escapado de output con htmlspecialchars
+ * - Clickjacking: X-Frame-Options: DENY
+ * - MIME Sniffing: X-Content-Type-Options: nosniff
+ *
+ * @ui_components
+ * - Fondo animado con partículas CSS
+ * - Card glassmorphism con blur backdrop
+ * - Logo corporativo con animación glow pulsante
+ * - Inputs con iconos Font Awesome
+ * - Botón submit con efecto hover brillante
+ * - Footer con año dinámico
+ *
+ * @constants
+ * - MAX_SESSION_LIFETIME: 28800 segundos (8 horas)
+ * - INACTIVITY_TIMEOUT: 1800 segundos (30 minutos)
+ *
+ * @error_handling
+ * - Errores de conexión BD: SweetAlert2 + log interno
+ * - Credenciales inválidas: SweetAlert2 mensaje genérico
+ * - Token CSRF inválido: Recarga de página
+ * - Sesión expirada: Redirección a este mismo archivo
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 2.5
+ * @since 2024
+ * @updated 2025-01-06
+ */
+
 // LIMPIAR BUFFER Y COMENZAR DESDE CERO
 if (ob_get_level()) ob_end_clean();
 ob_start();
@@ -99,11 +211,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
             $debugInfo[] = "❌ Error: Campos vacíos";
         } else {
             // Configuración de conexión a la base de datos
-            $serverName = "DESAROLLO-BACRO\\SQLEXPRESS";
+            require_once __DIR__ . '/config.php';
+            $serverName = $DB_HOST;
             $connectionOptions = array(
-                "Database" => "Comedor",
-                "Uid" => "Larome03", 
-                "PWD" => "Larome03",
+                "Database" => $DB_DATABASE_COMEDOR,
+                "Uid" => $DB_USERNAME,
+                "PWD" => $DB_PASSWORD,
                 "CharacterSet" => "UTF-8"
             );
             

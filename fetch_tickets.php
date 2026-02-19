@@ -1,11 +1,133 @@
 <?php
+/**
+ * @file fetch_tickets.php
+ * @brief API REST para obtener listado de tickets en formato JSON (DataTables compatible).
+ *
+ * @description
+ * Endpoint de API que retorna el listado de tickets de TI en formato JSON,
+ * optimizado para su consumo por DataTables. Filtra automáticamente los tickets
+ * del mes actual más los pendientes/en proceso de meses anteriores, permitiendo
+ * una vista enfocada en tickets activos sin saturar la interfaz.
+ *
+ * Este archivo provee datos para:
+ * - TableT1.php (tabla principal de tickets)
+ * - IniSoport.php (dashboard con métricas)
+ * - Cualquier componente que requiera listado de tickets vía AJAX
+ *
+ * Características de la consulta:
+ * - Tickets del mes y año actual
+ * - Tickets pendientes/en proceso de cualquier fecha
+ * - Ordenamiento descendente por fecha
+ * - Conversión de fechas a formato dd/mm/yyyy
+ * - Conversión de horas a formato HH:MM:SS
+ * - Incluye metadatos de imágenes adjuntas
+ *
+ * @module API de Tickets
+ * @access API Pública (sin autenticación - considerar agregar)
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension, json_encode
+ * - SQL Server: Funciones CONVERT, TRY_CONVERT, GETDATE
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Usuario: Larome03
+ * - Tabla: dbo.T3 (tickets TI)
+ * - Columnas retornadas:
+ *   - Nombre: Solicitante
+ *   - Correo: Email del solicitante
+ *   - Prioridad: Alta/Media/Baja/Crítica
+ *   - Empresa: Empresa relacionada
+ *   - Asunto: Título del ticket
+ *   - Mensaje: Descripción detallada
+ *   - Adjuntos: Archivos adjuntos
+ *   - Fecha/Hora: Fecha y hora de creación
+ *   - Id_Ticket: Identificador único
+ *   - Estatus: Estado actual del ticket
+ *   - PA: Persona asignada/responsable
+ *   - FechaEnProceso/HoraEnProceso: Timestamp de cambio a "En proceso"
+ *   - FechaPausa/HoraPausa: Timestamp de pausa
+ *   - FechaTerminado/HoraTerminado: Timestamp de resolución
+ *   - FechaCancelado/HoraCancelado: Timestamp de cancelación
+ *   - imagen_url, imagen_nombre, imagen_tipo, imagen_size: Metadatos de imagen
+ *
+ * @query_filters
+ * - Filtro temporal:
+ *   (Año actual AND Mes actual) OR (Año actual AND Estatus IN ('Pendiente', 'En proceso'))
+ * - Propósito: Mostrar tickets actuales + tickets activos de meses anteriores
+ *
+ * @inputs
+ * - Ninguno (no requiere parámetros)
+ * - Futuras mejoras: Parámetros de filtrado (fecha, estado, usuario)
+ *
+ * @outputs
+ * - Content-Type: application/json
+ * - Estructura DataTables:
+ *   {
+ *     "data": [
+ *       {
+ *         "Nombre ": "Juan Pérez",
+ *         "Correo": "juan@empresa.com",
+ *         "Prioridad": "Alta",
+ *         "Empresa": "BacroCorp",
+ *         "Asunto": "Problema con impresora",
+ *         "Mensaje": "Descripción...",
+ *         "Adjuntos": "archivo.pdf",
+ *         "Fecha": "15/01/2025",
+ *         "Hora": "14:30:00",
+ *         "Id_Ticket": "TIC-2025-001",
+ *         "Estatus": "Pendiente",
+ *         "PA": "Luis Vargas",
+ *         ...timestamps de estados...
+ *         "imagen_url": "uploads/img.jpg",
+ *         "imagen_nombre": "evidencia.jpg",
+ *         "imagen_tipo": "image/jpeg",
+ *         "imagen_size": "1024"
+ *       },
+ *       ...más tickets...
+ *     ]
+ *   }
+ * - Error de conexión: {"data": []}
+ *
+ * @security
+ * - ADVERTENCIA: No tiene autenticación (agregar sesión recomendado)
+ * - Credenciales de BD hardcoded (migrar a .env)
+ * - No expone errores de SQL al cliente
+ * - Content-Type establecido como JSON
+ *
+ * @date_formats
+ * - Fechas: dd/mm/yyyy (formato 103 de SQL Server)
+ * - Horas: HH:MM:SS (formato 108 de SQL Server)
+ * - TRY_CONVERT: Manejo seguro de fechas inválidas (retorna NULL)
+ *
+ * @performance
+ * - Sin paginación (todos los registros en una respuesta)
+ * - Para optimizar: Implementar paginación server-side de DataTables
+ * - Considerar caché para consultas frecuentes
+ *
+ * @todo
+ * - Agregar autenticación de sesión
+ * - Implementar paginación server-side
+ * - Agregar parámetros de filtrado
+ * - Migrar credenciales a variables de entorno
+ * - Añadir rate limiting
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.8
+ * @since 2024
+ * @updated 2025-01-15
+ */
+
 header('Content-Type: application/json');
 
-$serverName = "DESAROLLO-BACRO\\SQLEXPRESS";
+require_once __DIR__ . '/config.php';
+
+$serverName = $DB_HOST;
 $connectionInfo = array(
-  "Database" => "Ticket",
-  "UID" => "Larome03",
-  "PWD" => "Larome03",
+  "Database" => $DB_DATABASE,
+  "UID" => $DB_USERNAME,
+  "PWD" => $DB_PASSWORD,
   "CharacterSet" => "UTF-8"
 );
 $conn = sqlsrv_connect($serverName, $connectionInfo);
@@ -52,8 +174,8 @@ while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
         if (strpos($imagen_url, 'http://') === 0 || strpos($imagen_url, 'https://') === 0) {
             $imagen_completa = $imagen_url;
         } else {
-            // Construir URL completa
-            $imagen_completa = 'http://desarollo-bacro' . ltrim($imagen_url, '.');
+            // Construir URL relativa a la raíz del servidor
+            $imagen_completa = ltrim($imagen_url, '.');
         }
     }
     

@@ -1,16 +1,125 @@
 <?php
+/**
+ * @file FormSoporte.php
+ * @brief Formulario de creación de tickets de soporte técnico con notificaciones por email.
+ *
+ * @description
+ * Módulo de captura de tickets de soporte técnico que permite a los usuarios
+ * reportar incidencias, solicitudes y problemas relacionados con TI. Implementa
+ * un formulario completo con validación de campos, generación automática de
+ * número de ticket y notificaciones por correo electrónico tanto al solicitante
+ * como al equipo de administración TI.
+ *
+ * Características principales:
+ * - Formulario con múltiples campos de captura (solicitante, área, prioridad, etc.)
+ * - Validación de campos requeridos en servidor
+ * - Subida de archivos adjuntos (evidencias, capturas de pantalla)
+ * - Notificación automática por email al usuario (confirmación de creación)
+ * - Notificación automática por email al administrador TI (nueva solicitud)
+ * - Plantillas de email HTML con diseño profesional
+ * - Integración con base de datos de contactos comerciales
+ * - Interfaz glassmorphism con tema oscuro
+ *
+ * Flujo de creación de ticket:
+ * 1. Usuario llena formulario con datos del problema
+ * 2. Validación de campos requeridos en servidor
+ * 3. Inserción del ticket en base de datos (tabla T3)
+ * 4. Envío de email de confirmación al solicitante
+ * 5. Envío de email de notificación al administrador TI
+ * 6. Redirección con mensaje de éxito/error
+ *
+ * @module Módulo de Tickets de Soporte
+ * @access Público (sin requerir sesión en algunos casos) / Privado (según configuración)
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension, mail functions
+ * - PHPMailer: PHPMailer.php, SMTP.php, Exception.php (en /PHPMailer/src/)
+ * - JS CDN: Bootstrap 5, SweetAlert2, Font Awesome, jQuery
+ * - CSS CDN: Google Fonts (Outfit, Manrope)
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS (puerto 1433)
+ * - Base de datos: Ticket
+ * - Tabla de inserción: T3 (tickets TI)
+ * - Columnas: tik (ID), Nombre, Area, Prioridad, Empresa, Asunto, Descripcion,
+ *             FechaCreacion, HoraCreacion, Estado, Adjunto, Email
+ * - Base de datos secundaria: WIN-44O80L37Q7M\COMERCIAL → BASENUEVA
+ * - Tabla de consulta: vwLBSContactList (datos de contacto para autocompletar)
+ *
+ * @email
+ * - Servidor SMTP: smtp.office365.com
+ * - Puerto: 587 (TLS)
+ * - Autenticación: Office 365 / OAuth2
+ * - Remitente: tickets@bacrocorp.com
+ * - Destinatarios:
+ *   - Solicitante: Email capturado en formulario
+ *   - Admin TI: ADMIN_EMAIL (tickets@bacrocorp.com)
+ * - Plantillas HTML con logo corporativo y estilos inline
+ *
+ * @inputs
+ * - POST (campos del formulario):
+ *   - Nombre: Nombre del solicitante
+ *   - elect: Área/departamento del solicitante
+ *   - prio: Prioridad del ticket (Alta, Media, Baja, Crítica)
+ *   - empre: Empresa relacionada
+ *   - Asunto: Título/resumen del problema
+ *   - adj: Descripción detallada del problema
+ *   - fecha: Fecha de creación
+ *   - Hora: Hora de creación
+ *   - tik: Número de ticket (generado o manual)
+ *   - email: Email del solicitante (para notificaciones)
+ * - FILES: Archivos adjuntos (opcional)
+ *
+ * @outputs
+ * - HTML: Formulario de creación de ticket
+ * - Email: Correos de confirmación y notificación
+ * - Redirect: Página de confirmación o error
+ * - Database: Nuevo registro en tabla T3
+ *
+ * @security
+ * - Validación de campos requeridos antes de procesamiento
+ * - Sanitización de inputs antes de inserción en BD
+ * - Limpieza de caracteres especiales en nombres de archivos
+ * - Uso de prepared statements para prevenir SQL injection
+ * - Validación de tipos de archivo adjuntos
+ * - Límite de tamaño de archivos
+ *
+ * @constants
+ * - ADMIN_EMAIL: 'tickets@bacrocorp.com' — Email del administrador TI
+ * - ADMIN_NAME: 'Administrador TI BacroCorp' — Nombre para emails
+ * - HOME_URL: URL de página inicial del sistema
+ *
+ * @ui_components
+ * - Formulario multi-sección con campos organizados
+ * - Selectores dinámicos (área, prioridad, empresa)
+ * - Input de archivo con preview
+ * - Campos de fecha/hora con datepicker
+ * - Botones de envío y cancelar
+ * - Alertas SweetAlert2 para feedback
+ * - Diseño glassmorphism con fondo oscuro
+ *
+ * @error_handling
+ * - Validación de campos vacíos → Mensaje de error específico
+ * - Error de conexión BD → SweetAlert2 con detalles
+ * - Error de envío de email → Log interno + notificación
+ * - Error de subida de archivo → Mensaje descriptivo
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 2.0
+ * @since 2024
+ * @updated 2025-01-15
+ */
+
 // Incluir los archivos necesarios de PHPMailer
 require 'PHPMailer/src/PHPMailer.php';
 require 'PHPMailer/src/SMTP.php';
 require 'PHPMailer/src/Exception.php';
+require_once __DIR__ . '/config.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-// Configuración de correos
-define('ADMIN_EMAIL', 'tickets@bacrocorp.com');
-define('ADMIN_NAME', 'Administrador TI BacroCorp');
-define('HOME_URL', 'http://192.168.100.95/TicketBacros/M/website-menu-05/index.html');
+if (!defined('HOME_URL')) define('HOME_URL', 'M/website-menu-05/index.html');
 
 // Variable para controlar si el formulario ya se procesó
 $form_procesado = false;
@@ -47,11 +156,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_ticket'])) {
         $name10 = test_input($_POST["tik"]);
         
         // Insertar en la base de datos
-        $serverName = "DESAROLLO-BACRO\SQLEXPRESS";
+        $serverName = $DB_HOST;
         $connectionInfo = array(
-            "Database" => "Ticket",
-            "UID" => "Larome03",
-            "PWD" => "Larome03",
+            "Database" => $DB_DATABASE,
+            "UID" => $DB_USERNAME,
+            "PWD" => $DB_PASSWORD,
             "CharacterSet" => "UTF-8",
             "ReturnDatesAsStrings" => true
         );
@@ -163,14 +272,7 @@ function sendUserConfirmationEmail($name, $email, $priority, $department, $subje
         $mail = new PHPMailer(true);
         
         // Configuración del servidor SMTP
-        $mail->isSMTP();
-        $mail->Host = 'smtp.office365.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'tickets@bacrocorp.com';
-        $mail->Password = 'XTqzA0GkA#';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-        $mail->CharSet = 'UTF-8';
+        configurarSMTP($mail);
         $mail->Timeout = 10; // Timeout de 10 segundos
         
         // Destinatarios
@@ -200,14 +302,7 @@ function sendAdminNotificationEmail($name, $email, $priority, $department, $subj
         $mail = new PHPMailer(true);
         
         // Configuración del servidor SMTP
-        $mail->isSMTP();
-        $mail->Host = 'smtp.office365.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'tickets@bacrocorp.com';
-        $mail->Password = 'XTqzA0GkA#';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-        $mail->CharSet = 'UTF-8';
+        configurarSMTP($mail);
         $mail->Timeout = 10; // Timeout de 10 segundos
         
         // Destinatarios

@@ -1,3 +1,39 @@
+<?php
+/**
+ * @file demopruebatab.php
+ * @brief Demo de tabla DataTables con múltiples extensiones.
+ *
+ * @description
+ * Archivo de pruebas/demo para visualización de tablas con DataTables.
+ * Incluye múltiples extensiones y configuraciones para evaluar
+ * funcionalidades antes de implementarlas en producción.
+ *
+ * Extensiones DataTables incluidas:
+ * - RowGroup: Agrupación de filas
+ * - FixedColumns: Columnas fijas al hacer scroll horizontal
+ * - Select: Selección de filas
+ *
+ * Nota: Este archivo carga jQuery dos veces (3.5.1 y 1.11.3) lo cual
+ * puede causar conflictos. Considerar limpiar dependencias duplicadas.
+ *
+ * @module Módulo de Pruebas
+ * @access Desarrollo/Testing
+ *
+ * @dependencies
+ * - JS CDN: jQuery 3.5.1 + 1.11.3 (duplicado), DataTables 1.10.22 + 1.13.4
+ * - JS CDN: DataTables RowGroup 1.4.1, FixedColumns, Select 1.7.0
+ * - CSS CDN: DataTables, Bootstrap 3.3.7 + 5.3.0
+ *
+ * @todo
+ * - Eliminar carga duplicada de jQuery
+ * - Unificar versiones de DataTables
+ * - Documentar qué funcionalidad está siendo probada
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 0.1 (desarrollo)
+ * @since 2024
+ */
+?>
 <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
   <script src="https://cdn.datatables.net/1.10.22/js/jquery.dataTables.js"></script>
   <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.22/css/jquery.dataTables.css">

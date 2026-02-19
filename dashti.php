@@ -1,12 +1,68 @@
 <?php
+/**
+ * @file dashti.php
+ * @brief Dashboard TI con API de datos para DataTables.
+ *
+ * @description
+ * Módulo híbrido que sirve tanto como página de dashboard como endpoint
+ * de API para obtener datos de tickets. Cuando se llama con el parámetro
+ * action=getData, retorna JSON; de lo contrario, renderiza la vista HTML.
+ *
+ * Funcionalidades:
+ * - Vista de dashboard con estadísticas de tickets
+ * - API endpoint para obtener datos (?action=getData)
+ * - Consulta completa de todos los campos de tickets
+ * - Formateo de fechas a formato dd/mm/yyyy
+ * - Formateo de horas a formato HH:MM:SS
+ *
+ * Columnas retornadas por la API:
+ * - Nombre, Correo, Prioridad, Departamento (Empresa)
+ * - Asunto, Mensaje, Adjuntos
+ * - Fecha, Hora, NoTicket (Id_Ticket), Estatus
+ * - Responsable (PA)
+ * - Timestamps de estados: EnProceso, Pausa, Terminado, etc.
+ *
+ * @module Módulo de Dashboard TI
+ * @access Público / API
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension
+ * - JS CDN: DataTables, Bootstrap, Chart.js
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tabla: T3 (consulta)
+ *
+ * @api_endpoints
+ * - GET ?action=getData → JSON con array de tickets
+ *
+ * @inputs
+ * - GET['action']: 'getData' para modo API (opcional)
+ *
+ * @outputs
+ * - HTML: Dashboard completo (sin action param)
+ * - JSON: Array de tickets (con action=getData)
+ *
+ * @security
+ * - ADVERTENCIA: Sin autenticación
+ * - Credenciales hardcoded
+ * - Header Content-Type establecido
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.5
+ * @since 2024
+ */
+
 // -- BACKEND PHP: Conexión y consulta --
 
 header('Content-Type: text/html; charset=utf-8');
-$serverName = "DESAROLLO-BACRO\\SQLEXPRESS";
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
 $connectionOptions = [
-  "Database" => "Ticket",
-  "UID" => "Larome03",
-  "PWD" => "Larome03",
+  "Database" => $DB_DATABASE,
+  "UID" => $DB_USERNAME,
+  "PWD" => $DB_PASSWORD,
   "CharacterSet" => "UTF-8"
 ];
 

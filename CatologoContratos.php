@@ -1,3 +1,37 @@
+<?php
+/**
+ * @file CatologoContratos.php
+ * @brief Catálogo de contratos con exportación a Excel.
+ *
+ * @description
+ * Vista de catálogo de contratos corporativos con funcionalidades de
+ * gestión: visualización, edición, eliminación, carga y exportación.
+ * Integrado con el sistema del Comedor en servidor 192.168.100.79.
+ *
+ * Funcionalidades de los botones:
+ * - Ini: Regresar a Licitaciones.php
+ * - Car: Cargar nuevo contrato
+ * - Edit: Editar contrato seleccionado
+ * - Ec: Eliminar contrato
+ * - EX: Exportar a Excel
+ * - sincro: Subir archivos
+ *
+ * @module Módulo de Contratos
+ * @access Público
+ *
+ * @dependencies
+ * - JS CDN: jQuery 1.11.3, DataTables 1.13.4, Bootstrap 3.3.7 + 5.3.0
+ * - FixedColumns extension para DataTables
+ *
+ * @external_links
+ * - http://192.168.100.79/Comedor/Licitaciones.php
+ * - http://192.168.100.79/Comedor/CargarNuevoContrato.php
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.0
+ * @since 2024
+ */
+?>
   <button class="btn btn-default1" id="Ini" name='Ini' onclick="window.location.href='http://192.168.100.79/Comedor/Licitaciones.php'"> <img src="Inicio.jpg" width="65" /> </button> &nbsp;&nbsp;
   <button class="btn btn-default115" id="Car" name='Carg' onclick="window.location.href='http://192.168.100.79/Comedor/CargarNuevoContrato.php'"> <img src="Cargcon.png" width="50" /> </button>
   <button class="btn btn-default115" id="Edit" name='Edit' onclick="theFunction1();"> <img src="Contrato.jpg" width="70" /> </button>
@@ -66,10 +100,10 @@ body {
 
 
 <?php
+require_once __DIR__ . '/config.php';
 
-
-$serverName = "LUISROMERO\SQLEXPRESS"; //serverName\instanceName
-$connectionInfo = array( "Database"=>"Operaciones", "UID"=>"larome02", "PWD"=>"larome02","CharacterSet" => "UTF-8");
+$serverName = $DB_HOST_OPERACIONES;
+$connectionInfo = array( "Database"=>$DB_DATABASE_OPERACIONES, "UID"=>$DB_USERNAME_OPERACIONES, "PWD"=>$DB_PASSWORD_OPERACIONES, "CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 // if( $conn ) {

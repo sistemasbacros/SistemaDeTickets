@@ -1,5 +1,43 @@
 <?php
-// index.php
+/**
+ * @file TableT.php
+ * @brief Tabla de gestión de tickets con interfaz DataTables.
+ *
+ * @description
+ * Módulo de visualización tabular de tickets usando DataTables con Bootstrap 5.
+ * Presenta una tabla interactiva con ordenamiento, búsqueda, paginación y
+ * acciones por ticket. Diseño con tema azul corporativo y efectos CSS modernos.
+ *
+ * Características:
+ * - DataTables con Bootstrap 5 styling
+ * - Variables CSS personalizadas para tema corporativo
+ * - Color scheme: azul primario (#1e4e79), verde éxito, naranja warning, rojo error
+ * - Sin verificación de sesión explícita
+ * - SweetAlert2 para confirmaciones y alertas
+ * - Responsive design
+ *
+ * Este archivo es una versión alternativa de TableT1.php, posiblemente
+ * usada para un contexto diferente o como respaldo.
+ *
+ * @module Módulo de Gestión de Tickets
+ * @access Público o restringido (según implementación)
+ *
+ * @dependencies
+ * - JS CDN: Bootstrap 5.3.0, Font Awesome 6.4.0, DataTables 1.13.4, SweetAlert2 11
+ * - CSS CDN: Bootstrap 5, DataTables Bootstrap 5
+ *
+ * @css_variables
+ * - --primary-blue: #1e4e79 (color principal)
+ * - --dark-blue: #163d60 (variante oscura)
+ * - --light-blue: #e2eaf3 (fondos claros)
+ * - --success-green: #28a745 (éxito)
+ * - --warning-orange: #ffc107 (advertencia)
+ * - --error-red: #dc3545 (error)
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.5
+ * @since 2024
+ */
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -241,7 +279,7 @@
   </div>
 
   <div class="top-bar">
-    <a href="http://192.168.100.95/TicketBacros/M/website-menu-05/index.html" class="btn btn-primary">
+    <a href="M/website-menu-05/index.html" class="btn btn-primary">
       <i class="fas fa-home"></i> INICIO
     </a>
     <button class="btn btn-primary" id="assignTicketBtn">

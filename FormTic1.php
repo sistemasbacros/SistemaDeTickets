@@ -1,4 +1,61 @@
 <?php
+/**
+ * @file FormTic1.php
+ * @brief Formulario avanzado de creación de tickets TI con subida de imágenes.
+ *
+ * @description
+ * Formulario completo y avanzado para la creación de tickets de soporte TI.
+ * Requiere autenticación previa y precarga los datos del usuario desde la sesión.
+ * Incluye funcionalidad de subida de imágenes, generación automática de ID de ticket,
+ * y notificaciones por email mediante PHPMailer.
+ *
+ * Este es el formulario principal usado por empleados autenticados para
+ * reportar incidencias de TI. El archivo es extenso (~3000 líneas) debido a
+ * la inclusión de estilos CSS inline y lógica JavaScript compleja.
+ *
+ * Características principales:
+ * - Verificación de sesión con redirección a login
+ * - Precarga de datos del usuario (nombre, área, ID empleado)
+ * - Subida de imágenes (máx 5MB, formatos: jpeg, jpg, png, gif, webp)
+ * - Generación automática de carpeta uploads/ si no existe
+ * - Preview de imagen antes de envío
+ * - Zona horaria configurada: America/Mexico_City
+ * - Diseño glassmorphism con fondo animado
+ * - Integración con bases de datos de contactos y tickets
+ *
+ * @module Módulo de Tickets TI
+ * @access Privado (requiere sesión activa desde Loginti.php)
+ *
+ * @dependencies
+ * - PHP: session, date_default_timezone_set, file functions
+ * - PHPMailer: Notificaciones por email
+ * - JS CDN: Bootstrap 5, SweetAlert2, Font Awesome
+ * - Interno: Loginti.php (autenticación)
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tabla: T3 (inserción de nuevos tickets)
+ *
+ * @session
+ * - $_SESSION['logged_in']: Verificación de autenticación
+ * - $_SESSION['user_name']: Nombre del solicitante (precargado)
+ * - $_SESSION['user_id']: ID del empleado
+ * - $_SESSION['user_area']: Área del usuario
+ * - $_SESSION['user_username']: Username
+ *
+ * @uploads
+ * - Ruta: ../uploads/ (relativa al archivo)
+ * - Tamaño máximo: 5MB
+ * - Tipos permitidos: image/jpeg, image/jpg, image/png, image/gif, image/webp
+ * - Permisos carpeta: 0777
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 2.5
+ * @since 2024
+ * @updated 2025-01-20
+ */
+
 // INICIO DE SESIÓN Y VERIFICACIÓN
 session_start();
 
@@ -140,11 +197,11 @@ function determinarResponsableFinal($responsable_principal, $subtipo) {
     }
     
     // Conectar a la base de datos para verificar carga de trabajo
-    $serverName = "DESAROLLO-BACRO\SQLEXPRESS";
-    $connectionInfo = array( 
-        "Database"=>"Ticket", 
-        "UID"=>"Larome03", 
-        "PWD"=>"Larome03",
+    $serverName = $DB_HOST;
+    $connectionInfo = array(
+        "Database"=>$DB_DATABASE,
+        "UID"=>$DB_USERNAME,
+        "PWD"=>$DB_PASSWORD,
         "CharacterSet" => "UTF-8"
     );
     $conn = sqlsrv_connect($serverName, $connectionInfo);
@@ -2009,13 +2066,10 @@ function obtenerEmailResponsable($responsable) {
 require 'PHPMailer/src/PHPMailer.php';
 require 'PHPMailer/src/SMTP.php';
 require 'PHPMailer/src/Exception.php';
+require_once __DIR__ . '/config.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-
-// Configuración de correos
-define('ADMIN_EMAIL', 'tickets@bacrocorp.com');
-define('ADMIN_NAME', 'Administrador TI BacroCorp');
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
   // Variables para la imagen
@@ -2075,11 +2129,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $hora_actual_completa = date('Y-m-d H:i:s') . '.0000000'; // Formato: 2026-02-17 11:45:51.0000000
   
   // Insertar en la base de datos con estatus "En proceso", persona asignada y fecha/hora de proceso
-  $serverName = "DESAROLLO-BACRO\SQLEXPRESS";
-  $connectionInfo = array( 
-    "Database"=>"Ticket", 
-    "UID"=>"Larome03", 
-    "PWD"=>"Larome03",
+  $serverName = $DB_HOST;
+  $connectionInfo = array(
+    "Database"=>$DB_DATABASE,
+    "UID"=>$DB_USERNAME,
+    "PWD"=>$DB_PASSWORD,
     "CharacterSet" => "UTF-8"
   );
   $conn = sqlsrv_connect($serverName, $connectionInfo);
@@ -2154,14 +2208,7 @@ function sendUserConfirmationEmail($name, $email, $priority, $department, $subje
   try {
     $mail = new PHPMailer(true);
     
-    $mail->isSMTP();
-    $mail->Host = 'smtp.office365.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = 'tickets@bacrocorp.com';
-    $mail->Password = 'XTqzA0GkA#';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-    $mail->CharSet = 'UTF-8';
+    configurarSMTP($mail);
     
     $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
     $mail->addAddress($email, $name);
@@ -2183,14 +2230,7 @@ function sendAdminNotificationEmail($name, $email, $priority, $department, $subj
   try {
     $mail = new PHPMailer(true);
     
-    $mail->isSMTP();
-    $mail->Host = 'smtp.office365.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = 'tickets@bacrocorp.com';
-    $mail->Password = 'XTqzA0GkA#';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-    $mail->CharSet = 'UTF-8';
+    configurarSMTP($mail);
     
     $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
     $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
@@ -2212,14 +2252,7 @@ function sendResponsableNotificationEmail($name, $email, $priority, $department,
   try {
     $mail = new PHPMailer(true);
     
-    $mail->isSMTP();
-    $mail->Host = 'smtp.office365.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = 'tickets@bacrocorp.com';
-    $mail->Password = 'XTqzA0GkA#';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-    $mail->CharSet = 'UTF-8';
+    configurarSMTP($mail);
     
     $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
     

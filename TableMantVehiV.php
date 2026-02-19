@@ -1,7 +1,40 @@
 <?php
+/**
+ * @file TableMantVehiV.php
+ * @brief Tabla de mantenimiento vehicular - Vista alternativa.
+ *
+ * @description
+ * Variante de la tabla de mantenimiento vehicular (TableMantVehi.php).
+ * Consulta la misma tabla TMANVEHI pero posiblemente con diferente
+ * presentación, filtros o funcionalidades.
+ *
+ * La consulta es idéntica a TableMantVehi.php, seleccionando todos los
+ * campos relevantes del historial de mantenimientos vehiculares con
+ * formateo de fechas a formato legible.
+ *
+ * @module Módulo de Mantenimiento Vehicular
+ * @access Público (sin autenticación)
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension
+ * - JS CDN: DataTables, Bootstrap
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tabla: TMANVEHI
+ *
+ * @see TableMantVehi.php
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.0
+ * @since 2024
+ */
+
 ////////////////// Insert
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS"; //serverName\instanceName
-$connectionInfo = array( "Database"=>"Ticket", "UID"=>"Larome03", "PWD"=>"Larome03","CharacterSet" => "UTF-8");
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
+$connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 // if( $conn ) {
@@ -185,7 +218,7 @@ function test_input($data) {
 
 <!-- <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet"> -->
 <!-- <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script> -->
-   <a href="http://192.168.100.95/TicketBacros/M/website-menu-05/index1.html" style="color:black;font-size:25px;font-weight: bold;">INICIO</a>
+   <a href="M/website-menu-05/index1.html" style="color:black;font-size:25px;font-weight: bold;">INICIO</a>
 
 	 
 <div>
@@ -347,7 +380,7 @@ table.on('click', 'tbody tr', (e) => {
  
 			// Mostramos el texto devuelto por el archivo php
 			// alert(data);
-						window.location.href = 'http://192.168.100.95/TicketBacros/AsigBien.php'; //Will take you to Google.
+						window.location.href = 'AsigBien.php';
 	
 			
 		});

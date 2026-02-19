@@ -1,3 +1,55 @@
+<?php
+/**
+ * @file new 4.php
+ * @brief Página de acceso al sistema con diseño moderno animado.
+ *
+ * @description
+ * Formulario de login con diseño moderno usando Bootstrap 4.6.2 y
+ * animaciones CSS. Presenta una tarjeta centrada con efecto de sombra
+ * y animación de entrada fadeIn.
+ *
+ * Nota: Este archivo parece ser un prototipo o versión de prueba de
+ * la página de login. El nombre "new 4.php" sugiere que es una
+ * iteración de diseño. Considerar renombrar o integrar con Loginti.php.
+ *
+ * Características de diseño:
+ * - Fondo con gradiente gris y patrón de cubos (Transparent Textures)
+ * - Card centrada con sombra 3D
+ * - Tipografía Poppins de Google Fonts
+ * - Paleta corporativa azul (#1E4E79)
+ * - Animación fadeIn al cargar
+ * - Botón con efecto hover (scale)
+ *
+ * @module Módulo de Autenticación
+ * @access Público
+ *
+ * @dependencies
+ * - JS CDN: jQuery 3.7.1, Popper.js 1.16.1, Bootstrap 4.6.2
+ * - CSS CDN: Bootstrap 4.6.2, Google Fonts (Poppins)
+ * - Externa: Transparent Textures (patrón de fondo)
+ *
+ * @ui_components
+ * - Container global centrado
+ * - Login card con border-radius y sombra
+ * - Formulario con campos username/password
+ * - Botón submit con hover animation
+ * - Link de registro
+ *
+ * @css_animations
+ * - fadeIn: opacity 0→1, translateY 30px→0
+ * - Button hover: scale(1.03)
+ *
+ * @todo
+ * - Renombrar archivo a nombre descriptivo
+ * - Integrar con sistema de autenticación real
+ * - Añadir validación de formulario
+ * - Conectar con backend PHP
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 0.4 (desarrollo)
+ * @since 2024
+ */
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>

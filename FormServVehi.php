@@ -1,10 +1,57 @@
 <?php
+/**
+ * @file FormServVehi.php
+ * @brief Formulario de servicio y mantenimiento vehicular.
+ *
+ * @description
+ * Formulario para reportar solicitudes de mantenimiento vehicular.
+ * Genera automáticamente un ID de ticket único combinando un contador
+ * secuencial con un código aleatorio.
+ *
+ * Características:
+ * - Conexión directa a SQL Server
+ * - Generación automática de ID de ticket
+ * - Función de sanitización de inputs (test_input)
+ * - Inserta en tabla TMANVEHI
+ *
+ * Algoritmo de generación de ID:
+ * 1. Consulta COUNT(*) + 1 de TMANVEHI
+ * 2. Genera uniqid() y extrae últimos 2 caracteres
+ * 3. Añade segundos actuales
+ * 4. Formato final: {contador}_{otp}{segundos}
+ *
+ * @module Módulo de Mantenimiento Vehicular
+ * @access Público (sin autenticación)
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension, date functions
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tabla: TMANVEHI (INSERT)
+ *
+ * @functions
+ * - test_input($data): Sanitiza datos de entrada
+ *   Aplica: trim, stripslashes, htmlspecialchars
+ *
+ * @security
+ * - Sanitización de inputs con htmlspecialchars
+ * - ADVERTENCIA: Sin autenticación de sesión
+ * - die() expone errores de SQL
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.5
+ * @since 2024
+ */
+
 // ----------------- CONEXIÓN Y PROCESAMIENTO DEL FORMULARIO -----------------
-$serverName = "DESAROLLO-BACRO\\SQLEXPRESS";
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
 $connectionInfo = array(
-    "Database" => "Ticket",
-    "UID" => "Larome03",
-    "PWD" => "Larome03",
+    "Database" => $DB_DATABASE,
+    "UID" => $DB_USERNAME,
+    "PWD" => $DB_PASSWORD,
     "CharacterSet" => "UTF-8"
 );
 $conn = sqlsrv_connect($serverName, $connectionInfo);

@@ -1,4 +1,113 @@
 <?php
+/**
+ * @file update_ticket.php
+ * @brief API REST para actualización de tickets con notificaciones por email.
+ *
+ * @description
+ * Endpoint de API que maneja las actualizaciones de tickets del sistema. Recibe
+ * peticiones POST con los datos a actualizar, ejecuta las modificaciones en la
+ * base de datos y envía notificaciones por correo electrónico a las partes
+ * involucradas (solicitante, responsable asignado, administradores).
+ *
+ * Operaciones soportadas:
+ * - Asignación/cambio de responsable del ticket
+ * - Cambio de estado (Abierto, En Proceso, Resuelto, Cerrado)
+ * - Actualización de asunto/descripción
+ * - Registro de notas y comentarios de seguimiento
+ * - Actualización de fechas de atención y resolución
+ *
+ * Notificaciones automáticas:
+ * - Al asignar responsable: Email al técnico asignado
+ * - Al cambiar estado: Email al solicitante original
+ * - Al resolver ticket: Email de confirmación con detalles
+ * - Copia a administradores en todas las notificaciones
+ *
+ * Plantillas de email HTML con diseño profesional BacroCorp incluyendo:
+ * - Logo corporativo
+ * - Resumen del ticket actualizado
+ * - Historial de cambios
+ * - Link para ver el ticket en el sistema
+ *
+ * @module API de Tickets
+ * @access API (POST request requerido)
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension, json_encode/decode
+ * - PHPMailer: PHPMailer.php, SMTP.php, Exception.php
+ * - SMTP: smtp.office365.com:587 (TLS)
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tabla: T3 (tickets TI)
+ * - Operaciones: UPDATE con prepared statements
+ * - Columnas actualizables: Estado, Responsable, Asunto, FechaAsignacion,
+ *                           FechaResolucion, Notas, UltimaActualizacion
+ *
+ * @inputs
+ * - POST (application/x-www-form-urlencoded):
+ *   - id_ticket (required): ID único del ticket a actualizar
+ *   - responsable (required): Nombre del técnico responsable
+ *   - estatus (required): Nuevo estado del ticket
+ *   - asunto (optional): Nuevo asunto/título
+ *   - notas (optional): Notas de seguimiento
+ *   - fecha_resolucion (optional): Fecha de cierre
+ *
+ * @outputs
+ * - Content-Type: application/json
+ * - Respuesta exitosa:
+ *   {"success": true, "msg": "Ticket actualizado correctamente", "data": {...}}
+ * - Respuesta de error:
+ *   {"success": false, "msg": "Descripción del error"}
+ *
+ * @http_methods
+ * - POST: Único método permitido
+ * - GET/PUT/DELETE: Retorna error "Método no permitido"
+ *
+ * @email
+ * - Servidor SMTP: smtp.office365.com
+ * - Puerto: 587 (STARTTLS)
+ * - Remitente: tickets@bacrocorp.com
+ * - Plantillas HTML con estilos inline
+ * - Encabezados: Logo BacroCorp, número de ticket, estado
+ * - Cuerpo: Detalles del ticket, cambios realizados
+ * - Footer: Información de contacto, link al sistema
+ *
+ * @security
+ * - Validación de campos requeridos (id_ticket, responsable, estatus)
+ * - Content-Type JSON en response header
+ * - Sanitización de inputs antes de UPDATE
+ * - Prepared statements para prevenir SQL injection
+ * - No expone errores de BD en respuesta al cliente
+ *
+ * @constants
+ * - ADMIN_EMAIL: 'tickets@bacrocorp.com' — Email del administrador
+ * - ADMIN_NAME: 'Administrador TI BacroCorp' — Nombre del remitente
+ *
+ * @error_codes
+ * - "Método no permitido": Request no es POST
+ * - "Datos incompletos": Faltan campos requeridos
+ * - "Ticket no encontrado": ID no existe en BD
+ * - "Error de conexión": Fallo al conectar con BD
+ * - "Error de actualización": Fallo en query UPDATE
+ * - "Error de email": Fallo al enviar notificación (no crítico)
+ *
+ * @workflow
+ * 1. Recibir POST request
+ * 2. Validar método HTTP (POST obligatorio)
+ * 3. Extraer y validar parámetros requeridos
+ * 4. Conectar a base de datos
+ * 5. Ejecutar UPDATE con prepared statement
+ * 6. Obtener datos actualizados del ticket
+ * 7. Enviar notificaciones por email
+ * 8. Retornar respuesta JSON
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 3.0
+ * @since 2024
+ * @updated 2025-01-20
+ */
+
 // update_ticket.php - VERSIÓN COMPLETA CON ESTILOS ORIGINALES Y CORRECCIÓN DE FECHAS
 
 // HEADERS PRIMERO - ANTES DE CUALQUIER SALIDA
@@ -8,13 +117,10 @@ header('Content-Type: application/json');
 require 'PHPMailer/src/PHPMailer.php';
 require 'PHPMailer/src/SMTP.php';
 require 'PHPMailer/src/Exception.php';
+require_once __DIR__ . '/config.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-
-// Configuración
-define('ADMIN_EMAIL', 'tickets@bacrocorp.com');
-define('ADMIN_NAME', 'Administrador TI BacroCorp');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['success' => false, 'msg' => 'Método no permitido']);
@@ -35,11 +141,11 @@ if (empty($id_ticket) || empty($responsable) || empty($estatus)) {
 
 try {
     // Conectar a la base de datos
-    $serverName = "DESAROLLO-BACRO\SQLEXPRESS";
-    $connectionInfo = array( 
-        "Database" => "Ticket", 
-        "UID" => "Larome03", 
-        "PWD" => "Larome03",
+    $serverName = $DB_HOST;
+    $connectionInfo = array(
+        "Database" => $DB_DATABASE,
+        "UID" => $DB_USERNAME,
+        "PWD" => $DB_PASSWORD,
         "CharacterSet" => "UTF-8",
         "ReturnDatesAsStrings" => true
     );
@@ -208,14 +314,7 @@ function sendUserInProcessEmail($userName, $userEmail, $responsable, $ticketId, 
     try {
         $mail = new PHPMailer(true);
         
-        $mail->isSMTP();
-        $mail->Host = 'smtp.office365.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'tickets@bacrocorp.com';
-        $mail->Password = 'XTqzA0GkA#';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-        $mail->CharSet = 'UTF-8';
+        configurarSMTP($mail);
         
         $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
         $mail->addAddress($userEmail, $userName);
@@ -237,14 +336,7 @@ function sendAdminInProcessEmail($userName, $userEmail, $responsable, $ticketId,
     try {
         $mail = new PHPMailer(true);
         
-        $mail->isSMTP();
-        $mail->Host = 'smtp.office365.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'tickets@bacrocorp.com';
-        $mail->Password = 'XTqzA0GkA#';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-        $mail->CharSet = 'UTF-8';
+        configurarSMTP($mail);
         
         $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
         $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
@@ -266,14 +358,7 @@ function sendUserPauseEmail($userName, $userEmail, $responsable, $ticketId, $asu
     try {
         $mail = new PHPMailer(true);
         
-        $mail->isSMTP();
-        $mail->Host = 'smtp.office365.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'tickets@bacrocorp.com';
-        $mail->Password = 'XTqzA0GkA#';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-        $mail->CharSet = 'UTF-8';
+        configurarSMTP($mail);
         
         $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
         $mail->addAddress($userEmail, $userName);
@@ -295,14 +380,7 @@ function sendAdminPauseEmail($userName, $userEmail, $responsable, $ticketId, $as
     try {
         $mail = new PHPMailer(true);
         
-        $mail->isSMTP();
-        $mail->Host = 'smtp.office365.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'tickets@bacrocorp.com';
-        $mail->Password = 'XTqzA0GkA#';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-        $mail->CharSet = 'UTF-8';
+        configurarSMTP($mail);
         
         $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
         $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
@@ -324,14 +402,7 @@ function sendUserCompletedEmail($userName, $userEmail, $responsable, $ticketId, 
     try {
         $mail = new PHPMailer(true);
         
-        $mail->isSMTP();
-        $mail->Host = 'smtp.office365.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'tickets@bacrocorp.com';
-        $mail->Password = 'XTqzA0GkA#';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-        $mail->CharSet = 'UTF-8';
+        configurarSMTP($mail);
         
         $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
         $mail->addAddress($userEmail, $userName);
@@ -353,14 +424,7 @@ function sendAdminCompletedEmail($userName, $userEmail, $responsable, $ticketId,
     try {
         $mail = new PHPMailer(true);
         
-        $mail->isSMTP();
-        $mail->Host = 'smtp.office365.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'tickets@bacrocorp.com';
-        $mail->Password = 'XTqzA0GkA#';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-        $mail->CharSet = 'UTF-8';
+        configurarSMTP($mail);
         
         $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
         $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);

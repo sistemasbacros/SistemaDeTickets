@@ -1,7 +1,40 @@
+<?php
+/**
+ * @file Formasignar.php
+ * @brief Formulario de asignación de tickets de soporte TI.
+ *
+ * @description
+ * Formulario para la asignación de tickets a técnicos de soporte.
+ * Incluye navegación de regreso a la página principal del sistema.
+ *
+ * Características:
+ * - Bootstrap 4.3.1 para estilos
+ * - Campos requeridos marcados con asterisco rojo
+ * - Link de inicio a la página principal
+ *
+ * @module Módulo de Asignación
+ * @access Público
+ *
+ * @dependencies
+ * - JS CDN: jQuery 3.4.1, Popper.js, Bootstrap 4.3.1
+ * - CSS CDN: Bootstrap 4.3.1
+ *
+ * @external_links
+ * - http://192.168.100.95/TicketBacros/M/website-menu-05/index.html (inicio)
+ *
+ * @ui_components
+ * - Formulario con validación de campos requeridos
+ * - Link de navegación a inicio
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.0
+ * @since 2024
+ */
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Ticket soporte TI</title>  <a href="http://192.168.100.95/TicketBacros/M/website-menu-05/index.html" style="color:black;font-size:20px;font-weight: bold;" >INICIO</a>
+    <title>Ticket soporte TI</title>  <a href="M/website-menu-05/index.html" style="color:black;font-size:20px;font-weight: bold;" >INICIO</a>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
@@ -237,8 +270,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 ////////////////// Update
 
 ////////////////// Insert
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS"; //serverName\instanceName
-$connectionInfo = array( "Database"=>"Ticket", "UID"=>"Larome03", "PWD"=>"Larome03","CharacterSet" => "UTF-8");
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
+$connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 
@@ -275,9 +309,6 @@ alert("Se levanto de forma correcta tu ticket");
 
 ////////////////// Select
 
-// $serverName = "LUISROMERO\SQLEXPRESS"; //serverName\instanceName
-// $connectionInfo = array( "Database"=>"Comedor", "UID"=>"larome02", "PWD"=>"larome02");
-// $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 // if( $conn ) {
      // echo "Conexión establecida.<br />";

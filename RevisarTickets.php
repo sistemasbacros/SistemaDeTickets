@@ -1,7 +1,56 @@
 <?php
+/**
+ * @file RevisarTickets.php
+ * @brief Vista de consulta y filtrado de tickets con reportes.
+ *
+ * @description
+ * Módulo de visualización y búsqueda de tickets con capacidad de filtrado
+ * avanzado por nombre, rango de fechas y otros criterios. Presenta una
+ * tabla con todos los tickets que cumplen los filtros especificados.
+ *
+ * Este archivo no requiere autenticación (considerar agregar seguridad)
+ * y permite consultar el historial completo de tickets con múltiples
+ * columnas de información incluyendo timestamps de cada estado.
+ *
+ * Filtros disponibles:
+ * - Nombre del solicitante (búsqueda parcial con LIKE)
+ * - Fecha inicial (rango de búsqueda)
+ * - Fecha final (rango de búsqueda)
+ *
+ * @module Módulo de Reportes y Consultas
+ * @access Público (sin autenticación - ADVERTENCIA de seguridad)
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension
+ * - JS CDN: DataTables, Bootstrap, jQuery
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tabla: T3 (consulta con filtros)
+ * - Columnas: Nombre, Correo, Prioridad, Empresa, Asunto, Mensaje,
+ *             Adjuntos, Fecha, Hora, Id_Ticket, Estatus, PA,
+ *             HoraFin, Tipo, Clasificacion, Tiempo_Ejec, FinT...
+ *
+ * @inputs
+ * - GET['nombre']: Filtro por nombre (opcional)
+ * - GET['fecha_inicial']: Fecha inicio del rango (opcional)
+ * - GET['fecha_final']: Fecha fin del rango (opcional)
+ *
+ * @security
+ * - ADVERTENCIA: Sin verificación de sesión
+ * - Credenciales hardcoded (migrar a .env)
+ * - Parámetros GET sanitizados con LIKE
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.5
+ * @since 2024
+ */
+
 ////////////////// Backend (PHP) - Conexión y Consulta con Filtros
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS"; // Server de la base de datos
-$connectionInfo = array("Database" => "Ticket", "UID" => "Larome03", "PWD" => "Larome03", "CharacterSet" => "UTF-8");
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
+$connectionInfo = array("Database" => $DB_DATABASE, "UID" => $DB_USERNAME, "PWD" => $DB_PASSWORD, "CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect($serverName, $connectionInfo);
 
 // Obtener los filtros de la solicitud GET
@@ -226,7 +275,7 @@ sqlsrv_free_stmt($stmt);
 
 <body>
 
-    <a href="http://192.168.100.95/TicketBacros/M/website-menu-05/index.html" class="inicio-link">
+    <a href="M/website-menu-05/index.html" class="inicio-link">
         <button class="btn btn-light btn-sm"><i class="fas fa-home"></i> INICIO</button>
     </a>
 

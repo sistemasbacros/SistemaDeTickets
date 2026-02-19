@@ -1,4 +1,55 @@
 <?php
+/**
+ * @file RevisarT.php
+ * @brief Vista segura de revisión de tickets con filtrado por usuario.
+ *
+ * @description
+ * Módulo de visualización de tickets con autenticación requerida.
+ * Implementa filtrado inteligente basado en el usuario autenticado,
+ * mostrando solo los tickets relevantes según permisos y área.
+ *
+ * Incluye función de extracción inteligente de apellidos para
+ * correlacionar tickets con usuarios del sistema.
+ *
+ * Características:
+ * - Verificación de sesión obligatoria
+ * - Extracción inteligente de apellidos del nombre completo
+ * - Filtrado de tickets por usuario/área
+ * - Interfaz con DataTables y diseño glassmorphism
+ *
+ * Algoritmo de extracción de apellidos:
+ * - 4+ partes: Primeras 2 como apellidos (ROMERO LOPEZ LUIS ANTONIO → ROMERO LOPEZ)
+ * - 3 partes: Primera como apellido
+ * - 2 partes: Primera como apellido
+ *
+ * @module Módulo de Consulta de Tickets
+ * @access Privado (requiere sesión activa desde Loginti.php)
+ *
+ * @dependencies
+ * - PHP: session, sqlsrv extension
+ * - JS CDN: DataTables, Bootstrap, SweetAlert2
+ * - Interno: Loginti.php (autenticación)
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tabla: T3 (consulta filtrada)
+ *
+ * @session
+ * - $_SESSION['logged_in']: Verificación (debe ser true)
+ * - $_SESSION['user_name']: Nombre para filtrado
+ * - $_SESSION['user_id']: ID del empleado
+ * - $_SESSION['user_area']: Área del usuario
+ * - $_SESSION['user_username']: Username
+ *
+ * @functions
+ * - extraerApellidos($nombre_completo): Extrae apellidos de nombre completo
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 2.0
+ * @since 2024
+ */
+
 ////////////////// Backend (PHP) - Conexión y Consulta con Filtros
 // INICIO DE SESIÓN Y VERIFICACIÓN
 session_start();
@@ -56,8 +107,9 @@ $comodines_busqueda = [
 // Eliminar duplicados
 $comodines_busqueda = array_unique($comodines_busqueda);
 
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS";
-$connectionInfo = array("Database" => "Ticket", "UID" => "Larome03", "PWD" => "Larome03", "CharacterSet" => "UTF-8");
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
+$connectionInfo = array("Database" => $DB_DATABASE, "UID" => $DB_USERNAME, "PWD" => $DB_PASSWORD, "CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect($serverName, $connectionInfo);
 
 if (!$conn) {
@@ -137,7 +189,7 @@ $array15 = []; // imagen_tipo
 $array16 = []; // imagen_size
 
 // URL base para las imágenes
-$base_url = "http://desarollo-bacros/";
+$base_url = "/";
 
 while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
     array_push($array1, $row['Nombre']);

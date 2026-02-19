@@ -1,7 +1,53 @@
 <?php
+/**
+ * @file TableMantVehi.php
+ * @brief Tabla de gestión de mantenimiento vehicular.
+ *
+ * @description
+ * Módulo de visualización y gestión de registros de mantenimiento
+ * de vehículos corporativos. Consulta la tabla TMANVEHI para mostrar
+ * el historial y estado de mantenimientos de la flota vehicular.
+ *
+ * Columnas de la tabla TMANVEHI:
+ * - IDT: Identificador único del registro
+ * - PLACAS: Placas del vehículo
+ * - PROBLEMA: Descripción del problema reportado
+ * - PRIORIDAD: Nivel de urgencia (Alta, Media, Baja)
+ * - FECHA: Fecha de reporte
+ * - NOMBRE: Nombre del solicitante/conductor
+ * - DEPARTAMENTO: Área del solicitante
+ * - Fecha_Ingreso/Hora_Ingreso: Entrada al taller
+ * - ASIGNADO: Técnico asignado
+ * - FECHA_RES/HORA: Fecha y hora de resolución
+ * - ESTADO: Estado del mantenimiento
+ * - Diagnostico: Diagnóstico técnico
+ * - COMENTARIOS: Notas adicionales
+ *
+ * @module Módulo de Mantenimiento Vehicular
+ * @access Público (sin autenticación)
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension
+ * - JS CDN: DataTables, Bootstrap
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tabla: TMANVEHI (Tabla de Mantenimiento Vehicular)
+ *
+ * @security
+ * - ADVERTENCIA: Sin verificación de sesión
+ * - Credenciales hardcoded
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.5
+ * @since 2024
+ */
+
 ////////////////// Insert
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS"; //serverName\instanceName
-$connectionInfo = array( "Database"=>"Ticket", "UID"=>"Larome03", "PWD"=>"Larome03","CharacterSet" => "UTF-8");
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
+$connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 // if( $conn ) {
@@ -185,7 +231,7 @@ function test_input($data) {
 <body class="container py-4">
 
   <div class="header-buttons">
-    <a href="http://192.168.100.95/TicketBacros/M/website-menu-05/index1.html" class="btn btn-dark btn-custom">INICIO</a>
+    <a href="M/website-menu-05/index1.html" class="btn btn-dark btn-custom">INICIO</a>
     <button class="btn btn-outline-primary btn-custom" onclick="theFunction2()">FECHA INGRESO</button>
     <button class="btn btn-outline-success btn-custom" onclick="theFunction1()">ASIGNAR</button>
     <button class="btn btn-outline-info btn-custom" onclick="ExportToExcel('xlsx')">
@@ -361,7 +407,7 @@ table.on('click', 'tbody tr', (e) => {
 						// window.location.href = 'http://192.168.100.95/TicketBacros/AsigBien.php'; //Will take you to Google.
 						
 						
-						window.open('http://192.168.100.95/TicketBacros/AsigBien1.php?','Asigna tu ticket','toolbars=0,width=600,height=500,right=200, top=200,scrollbars=1,resizable=5');
+						window.open('AsigBien1.php?','Asigna tu ticket','toolbars=0,width=600,height=500,right=200, top=200,scrollbars=1,resizable=5');
 	
 			
 		});
@@ -384,7 +430,7 @@ table.on('click', 'tbody tr', (e) => {
 						// window.location.href = 'http://192.168.100.95/TicketBacros/AsigBien.php'; //Will take you to Google.
 						
 						
-						window.open('http://192.168.100.95/TicketBacros/AsigBien2.php?','Asigna tu ticket','toolbars=0,width=600,height=500,right=200, top=200,scrollbars=1,resizable=5');
+						window.open('AsigBien2.php?','Asigna tu ticket','toolbars=0,width=600,height=500,right=200, top=200,scrollbars=1,resizable=5');
 	
 			
 		});

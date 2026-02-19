@@ -1,7 +1,57 @@
 <?php
+/**
+ * @file Asignarticket.php
+ * @brief Módulo de asignación de tickets de Servicios Generales a personal.
+ *
+ * @description
+ * Interfaz para asignar tickets de Servicios Generales (tabla TicketsSG)
+ * al personal disponible (tabla conped). Permite visualizar tickets pendientes
+ * y asignarlos a técnicos o personal de mantenimiento.
+ *
+ * Este módulo trabaja con la tabla TicketsSG (diferente a T3 usada por TI)
+ * y consulta la tabla conped para obtener la lista de personal disponible
+ * para asignación.
+ *
+ * Características:
+ * - Conexión directa a SQL Server
+ * - Consulta de personal ordenado por nombre
+ * - Vista de tickets con todos los campos relevantes
+ * - Sin verificación de sesión (considerar agregar seguridad)
+ *
+ * Datos consultados de tickets:
+ * - Id_Ticket, Nombre, Correo, Prioridad, Departamento (Empresa)
+ * - Asunto, Problema (Adjuntos), Mensaje
+ * - Fecha/Hora de captura, proceso y término
+ * - Estatus, Enlace
+ *
+ * @module Módulo de Servicios Generales
+ * @access Público (ADVERTENCIA: sin autenticación)
+ *
+ * @dependencies
+ * - PHP: sqlsrv extension
+ * - JS CDN: Bootstrap, DataTables
+ *
+ * @database
+ * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
+ * - Base de datos: Ticket
+ * - Tablas:
+ *   - conped: Catálogo de personal (nombre)
+ *   - TicketsSG: Tickets de Servicios Generales
+ *
+ * @security
+ * - ADVERTENCIA: Sin verificación de sesión
+ * - Credenciales hardcoded
+ * - die() expone errores de SQL al cliente
+ *
+ * @author Equipo Tecnología BacroCorp
+ * @version 1.2
+ * @since 2024
+ */
+
 // Conexión SQL Server
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS";
-$connectionInfo = array("Database" => "Ticket", "UID" => "Larome03", "PWD" => "Larome03", "CharacterSet" => "UTF-8");
+require_once __DIR__ . '/config.php';
+$serverName = $DB_HOST;
+$connectionInfo = array("Database" => $DB_DATABASE, "UID" => $DB_USERNAME, "PWD" => $DB_PASSWORD, "CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect($serverName, $connectionInfo);
 if (!$conn) die(print_r(sqlsrv_errors(), true));
 
@@ -185,7 +235,7 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
 
     document.getElementById("homeButton").addEventListener("click", function() {
   // Reemplaza "index.html" con la ruta a tu p谩gina de inicio
-  window.location.href = "http://192.168.100.95/TicketBacros/MenSG.php";
+  window.location.href = "MenSG.php";
 });
 
 
@@ -197,7 +247,7 @@ const table = new DataTable('#ticketsTable', {
     t.Id, t.Nombre, t.Correo, t.Prioridad, t.Departamento,
     t.Asunto, t.Problema, t.Mensaje, t.Fecha_capturat, t.Hora_capturat,
     t.Estatus, t.fecha_proceso, t.hora_proceso, t.Fecha_Termino, t.Hora_Termino,
-    t.Enlace ? `<a href="http://192.168.100.95/TicketBacros/${t.Enlace}" target="_blank">http://192.168.100.95/TicketBacros/${t.Enlace}</a>` : 'Sin evidencia'
+    t.Enlace ? `<a href="${t.Enlace}" target="_blank">${t.Enlace}</a>` : 'Sin evidencia'
   ]),
   columns: [
     { title: 'ID' }, { title: 'Nombre' }, { title: 'Correo' },
