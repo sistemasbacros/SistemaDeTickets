@@ -151,12 +151,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                 "Database" => $dbName,
                 "Uid" => $dbUser,
                 "PWD" => $dbPass,
-                "CharacterSet" => "UTF-8"
+                "CharacterSet" => "UTF-8",
+                "TrustServerCertificate" => true,  // Confiar en certificados auto-firmados
+                "Encrypt" => true                   // Mantener cifrado pero sin verificar cert
             );
             
             $debugInfo[] = "🔌 Intentando conectar a: " . $serverName;
             $debugInfo[] = "🔌 Base de datos: " . $dbName;
             $debugInfo[] = "🔌 Usuario BD: " . $dbUser;
+            $debugInfo[] = "🔐 TrustServerCertificate: habilitado";
             writeLog("🔌 Conectando a BD - Host: $serverName, DB: $dbName, User: $dbUser", 'INFO');
             
             // Establecer conexión
