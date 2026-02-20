@@ -12,6 +12,7 @@ services:
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT:-1433}
       - DB_DATABASE=${DB_DATABASE}
+      - DB_DATABASE_COMEDOR=${DB_DATABASE_COMEDOR:-Comedor}
       - DB_USERNAME=${DB_USERNAME}
       - DB_PASSWORD=${DB_PASSWORD}
       - SMTP_HOST=${SMTP_HOST}
