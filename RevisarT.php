@@ -109,7 +109,7 @@ $comodines_busqueda = array_unique($comodines_busqueda);
 
 require_once __DIR__ . '/config.php';
 $serverName = $DB_HOST;
-$connectionInfo = array("Database" => $DB_DATABASE, "UID" => $DB_USERNAME, "PWD" => $DB_PASSWORD, "CharacterSet" => "UTF-8");
+$connectionInfo = array("Database" => $DB_DATABASE, "UID" => $DB_USERNAME, "PWD" => $DB_PASSWORD, "CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
 $conn = sqlsrv_connect($serverName, $connectionInfo);
 
 if (!$conn) {

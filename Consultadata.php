@@ -90,7 +90,7 @@
 
 require_once __DIR__ . '/config.php';
 $serverName1 = $DB_HOST_COMERCIAL;
-$connectionInfo1 = array( "Database"=>$DB_DATABASE_COMERCIAL, "UID"=>$DB_USERNAME_COMERCIAL, "PWD"=>$DB_PASSWORD_COMERCIAL,"CharacterSet" => "UTF-8");
+$connectionInfo1 = array( "Database"=>$DB_DATABASE_COMERCIAL, "UID"=>$DB_USERNAME_COMERCIAL, "PWD"=>$DB_PASSWORD_COMERCIAL,"CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
 $conn1 = sqlsrv_connect( $serverName1, $connectionInfo1);
 
 /////Query ordenes de cancelación de alimentos.
@@ -111,7 +111,7 @@ array_push($array_tot1,$row['ContactName']);
 
 
 $serverName = $DB_HOST;
-$connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8");
+$connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 // if( $conn ) {
