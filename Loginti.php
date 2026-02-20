@@ -1,116 +1,4 @@
 <?php
-/**
- * @file Loginti.php
- * @brief Sistema de autenticación centralizado para el Sistema de Tickets BacroCorp.
- *
- * @description
- * Módulo principal de autenticación que implementa login seguro con múltiples
- * capas de protección. Gestiona el inicio de sesión de usuarios consultando
- * la base de datos de empleados y establece una sesión segura con tokens CSRF,
- * vinculación de IP y tiempos de expiración configurables.
- *
- * Este archivo actúa como punto de entrada único (Single Entry Point) para
- * todos los módulos del sistema que requieren autenticación. Implementa
- * un diseño moderno glassmorphism con efectos visuales animados.
- *
- * Características de seguridad implementadas:
- * - Token CSRF único por sesión (32 bytes aleatorios)
- * - Vinculación de sesión a IP del cliente (session hijacking protection)
- * - Cookies HttpOnly, SameSite=Strict
- * - Headers anti-cache para prevenir almacenamiento de credenciales
- * - Headers de seguridad: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection
- * - Timeout de sesión: 8 horas máximo, 30 minutos de inactividad
- * - Regeneración de ID de sesión en cada login exitoso
- * - Validación de token de origen para peticiones POST
- * - Output buffering para prevenir header injection
- *
- * Flujo de autenticación:
- * 1. Usuario accede → Se genera token CSRF y token de origen
- * 2. POST con credenciales → Validación de tokens CSRF y origen
- * 3. Consulta a BD → Verifica usuario y contraseña en Comedor.dbo.tbempleado
- * 4. Login exitoso → Regenera session_id, establece variables de sesión
- * 5. Redirección → IniSoport.php (dashboard principal)
- *
- * @module Módulo de Autenticación
- * @access Público (punto de entrada de login)
- *
- * @dependencies
- * - PHP: session, output buffering, sqlsrv extension
- * - JS CDN: SweetAlert2 11 (alertas de error/éxito)
- * - CSS: Estilos inline glassmorphism, Font Awesome (iconos)
- * - Destino: IniSoport.php (post-login redirect)
- *
- * @database
- * - Servidor: DESAROLLO-BACRO\SQLEXPRESS (puerto 1433)
- * - Base de datos: Comedor
- * - Tabla: dbo.tbempleado
- * - Columnas consultadas: nombre, username, id_empleado, area, contra
- * - Autenticación: UID=sa, PWD=configurado
- *
- * @session
- * - Genera (si no existe):
- *   - $_SESSION['csrf_token']      — Token CSRF (64 chars hex)
- *   - $_SESSION['origin_token']    — Token de origen para double-submit
- * - Establece (post-login exitoso):
- *   - $_SESSION['logged_in']       — true (bandera de autenticación)
- *   - $_SESSION['user_id']         — ID del empleado (int)
- *   - $_SESSION['user_name']       — Nombre completo del usuario
- *   - $_SESSION['user_area']       — Área/departamento del usuario
- *   - $_SESSION['user_username']   — Username de login
- *   - $_SESSION['client_ip']       — IP del cliente (vinculación)
- *   - $_SESSION['login_time']      — Timestamp de login (Unix)
- *   - $_SESSION['last_activity']   — Timestamp última actividad
- * - Configuración de sesión PHP:
- *   - session.cookie_httponly = 1
- *   - session.cookie_samesite = Strict
- *   - session.use_strict_mode = 1
- *   - session.use_only_cookies = 1
- *
- * @inputs
- * - POST: username, password, csrf_token, origin_token (desde formulario)
- * - COOKIE: PHPSESSID (sesión PHP)
- * - SERVER: REMOTE_ADDR (IP del cliente)
- *
- * @outputs
- * - HTML: Formulario de login con diseño glassmorphism
- * - Redirect: Header Location a IniSoport.php (login exitoso)
- * - JS: Alertas SweetAlert2 para errores de autenticación
- *
- * @security
- * - CSRF Protection: Token validation en cada POST
- * - Double-Submit Cookie: origin_token validation
- * - Session Fixation: session_regenerate_id(true) post-login
- * - IP Binding: Sesión vinculada a IP del cliente
- * - Timing Attack: No se revela si usuario existe (mensaje genérico)
- * - SQL Injection: Uso de parámetros en consultas (aunque mejorable)
- * - XSS: Escapado de output con htmlspecialchars
- * - Clickjacking: X-Frame-Options: DENY
- * - MIME Sniffing: X-Content-Type-Options: nosniff
- *
- * @ui_components
- * - Fondo animado con partículas CSS
- * - Card glassmorphism con blur backdrop
- * - Logo corporativo con animación glow pulsante
- * - Inputs con iconos Font Awesome
- * - Botón submit con efecto hover brillante
- * - Footer con año dinámico
- *
- * @constants
- * - MAX_SESSION_LIFETIME: 28800 segundos (8 horas)
- * - INACTIVITY_TIMEOUT: 1800 segundos (30 minutos)
- *
- * @error_handling
- * - Errores de conexión BD: SweetAlert2 + log interno
- * - Credenciales inválidas: SweetAlert2 mensaje genérico
- * - Token CSRF inválido: Recarga de página
- * - Sesión expirada: Redirección a este mismo archivo
- *
- * @author Equipo Tecnología BacroCorp
- * @version 2.5
- * @since 2024
- * @updated 2025-01-06
- */
-
 // LIMPIAR BUFFER Y COMENZAR DESDE CERO
 if (ob_get_level()) ob_end_clean();
 ob_start();
@@ -119,15 +7,36 @@ ob_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+// ─── SISTEMA DE LOGGING PARA DEPURACIÓN ───────────────────────────────────────
+define('LOG_FILE', __DIR__ . '/logs/login_debug.log');
+define('LOG_ENABLED', true);
+
+function writeLog($message, $level = 'INFO') {
+    if (!LOG_ENABLED) return;
+    $logDir = dirname(LOG_FILE);
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    $timestamp = date('Y-m-d H:i:s');
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+    $sessionId = session_id() ?: 'NO_SESSION';
+    $logEntry = sprintf("[%s] [%s] [IP: %s] [SID: %s] %s\n", $timestamp, str_pad($level, 7), $ip, substr($sessionId, 0, 10) . '...', $message);
+    @file_put_contents(LOG_FILE, $logEntry, FILE_APPEND | LOCK_EX);
+}
+
+writeLog("========== INICIO DE PETICIÓN ==========", 'INFO');
+writeLog("Método: " . $_SERVER['REQUEST_METHOD'], 'INFO');
+
 // CONFIGURACIÓN DE SESIÓN SEGURA ANTES DE session_start()
 ini_set('session.cookie_httponly', 1);
-ini_set('session.cookie_secure', 0); // Cambiar a 1 si usas HTTPS
+ini_set('session.cookie_secure', 0);
 ini_set('session.use_strict_mode', 1);
 ini_set('session.cookie_samesite', 'Strict');
 ini_set('session.use_only_cookies', 1);
 
 // INICIAR SESIÓN CON CONFIGURACIÓN SEGURA
 session_start();
+writeLog("Sesión iniciada. Session ID: " . session_id(), 'INFO');
 
 // HEADERS PARA PREVENIR CACHE
 header("Cache-Control: no-cache, no-store, must-revalidate, max-age=0");
@@ -195,11 +104,16 @@ if (isset($_GET['error']) && $_GET['error'] === 'session_expired') {
 // Procesar login si se envió el formulario
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($_POST['contrasena'])) {
     
+    writeLog("========== INTENTO DE LOGIN ==========", 'INFO');
+    writeLog("Usuario: " . $_POST['usuario'], 'INFO');
+    
     // VERIFICAR TOKEN CSRF
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         $loginError = 'Error de seguridad. Por favor, recarga la página e intenta nuevamente.';
         $debugInfo[] = "❌ Error CSRF: Token inválido";
+        writeLog("❌ Error CSRF", 'ERROR');
     } else {
+        writeLog("✅ Token CSRF válido", 'INFO');
         $usuario = trim($_POST['usuario']);
         $contrasena = trim($_POST['contrasena']);
         
@@ -209,25 +123,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
         if (empty($usuario) || empty($contrasena)) {
             $loginError = 'Usuario y contraseña son requeridos';
             $debugInfo[] = "❌ Error: Campos vacíos";
+            writeLog("❌ Campos vacíos", 'ERROR');
         } else {
-            // Configuración de conexión a la base de datos
+            // Configuración de conexión a la base de datos usando config.php
             require_once __DIR__ . '/config.php';
-            $serverName = $DB_HOST;
+            
+            // Verificar que las variables de entorno estén definidas
+            if (empty($DB_HOST)) {
+                writeLog("❌ ERROR: Variable DB_HOST no definida", 'ERROR');
+                $debugInfo[] = "❌ ERROR: Variable de entorno DB_HOST no está definida";
+            }
+            if (empty($DB_DATABASE_COMEDOR)) {
+                writeLog("❌ ERROR: Variable DB_DATABASE_COMEDOR no definida", 'ERROR');
+                $debugInfo[] = "❌ ERROR: Variable de entorno DB_DATABASE_COMEDOR no está definida";
+            }
+            if (empty($DB_USERNAME)) {
+                writeLog("❌ ERROR: Variable DB_USERNAME no definida", 'ERROR');
+                $debugInfo[] = "❌ ERROR: Variable de entorno DB_USERNAME no está definida";
+            }
+            
+            $serverName = $DB_HOST ?: 'SERVIDOR_NO_DEFINIDO';
+            $dbName = $DB_DATABASE_COMEDOR ?: 'Comedor';
+            $dbUser = $DB_USERNAME ?: 'USUARIO_NO_DEFINIDO';
+            $dbPass = $DB_PASSWORD ?: '';
+            
             $connectionOptions = array(
-                "Database" => $DB_DATABASE_COMEDOR,
-                "Uid" => $DB_USERNAME,
-                "PWD" => $DB_PASSWORD,
+                "Database" => $dbName,
+                "Uid" => $dbUser,
+                "PWD" => $dbPass,
                 "CharacterSet" => "UTF-8"
             );
             
             $debugInfo[] = "🔌 Intentando conectar a: " . $serverName;
-            $debugInfo[] = "🔌 Base de datos: Comedor";
+            $debugInfo[] = "🔌 Base de datos: " . $dbName;
+            $debugInfo[] = "🔌 Usuario BD: " . $dbUser;
+            writeLog("🔌 Conectando a BD - Host: $serverName, DB: $dbName, User: $dbUser", 'INFO');
             
             // Establecer conexión
             $conn = sqlsrv_connect($serverName, $connectionOptions);
             
             if ($conn) {
                 $debugInfo[] = "✅ Conexión exitosa a SQL Server";
+                writeLog("✅ Conexión exitosa a SQL Server", 'INFO');
                 
                 // Consulta para verificar las credenciales
                 $sql = "SELECT Id_Empleado, Nombre, Area, Usuario 
@@ -235,21 +172,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                         WHERE Usuario = ? AND Contrasena = ?";
                 $params = array($usuario, $contrasena);
                 
-                $debugInfo[] = "📝 Ejecutando consulta: " . $sql;
-                $debugInfo[] = "📝 Parámetros: Usuario=" . $usuario . ", Contraseña=" . $contrasena;
+                $debugInfo[] = "📝 Ejecutando consulta SQL";
+                writeLog("📝 Ejecutando consulta para usuario: $usuario", 'INFO');
                 
                 $stmt = sqlsrv_query($conn, $sql, $params);
                 
                 if ($stmt) {
                     $debugInfo[] = "✅ Consulta ejecutada correctamente";
+                    writeLog("✅ Consulta ejecutada", 'INFO');
                     
                     if (sqlsrv_has_rows($stmt)) {
                         $debugInfo[] = "✅ Usuario encontrado en la base de datos";
+                        writeLog("✅ Usuario encontrado: $usuario", 'INFO');
                         
                         $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
                         
                         // LIMPIAR SESIÓN EXISTENTE COMPLETAMENTE
                         session_regenerate_id(true);
+                        writeLog("🔄 Session ID regenerado", 'INFO');
                         
                         // Configurar sesión con múltiples factores de seguridad
                         $_SESSION = array(); // Limpiar todo primero
@@ -260,46 +200,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                         $_SESSION['logged_in'] = true;
                         $_SESSION['LOGIN_TIME'] = time();
                         $_SESSION['LAST_ACTIVITY'] = time();
-                        $_SESSION['last_activity'] = time(); // Para verificación de acceso directo
-                        $_SESSION['authenticated_from_login'] = true; // BANDERA CRÍTICA
-                        $_SESSION['session_token'] = bin2hex(random_bytes(32)); // Token único de sesión
+                        $_SESSION['last_activity'] = time();
+                        $_SESSION['authenticated_from_login'] = true;
+                        $_SESSION['session_token'] = bin2hex(random_bytes(32));
                         $_SESSION['ip_address'] = $_SERVER['REMOTE_ADDR'];
                         $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'];
                         $_SESSION['initiated'] = true;
                         $_SESSION['last_regeneration'] = time();
-                        $_SESSION['login_source'] = 'form_login'; // VERIFICACIÓN CRÍTICA PARA ACCESO DIRECTO
-                        $_SESSION['origin_token'] = bin2hex(random_bytes(16)); // Token de origen único
+                        $_SESSION['login_source'] = 'form_login';
+                        $_SESSION['origin_token'] = bin2hex(random_bytes(16));
+                        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
                         
-                        $debugInfo[] = "✅ Sesión configurada para: " . $row['Nombre'];
-                        $debugInfo[] = "✅ Bandera authenticated_from_login establecida";
-                        $debugInfo[] = "✅ Token de sesión generado";
-                        $debugInfo[] = "✅ IP address almacenada: " . $_SERVER['REMOTE_ADDR'];
-                        $debugInfo[] = "✅ Login source establecido: form_login";
-                        $debugInfo[] = "✅ Token de origen generado";
-                        $debugInfo[] = "🔄 Redirigiendo a IniSoport.php...";
+                        writeLog("✅✅✅ LOGIN EXITOSO para: " . $row['Nombre'], 'INFO');
+                        writeLog("🔄 Redirigiendo a IniSoport.php...", 'INFO');
                         
                         // Cerrar conexión
                         sqlsrv_free_stmt($stmt);
                         sqlsrv_close($conn);
                         
-                        // REDIRIGIR A INISOPORT.PHP
+                        // REDIRIGIR A INISOPORT.PHP - IMPORTANTE: exit() después
+                        ob_end_clean();
                         header("Location: IniSoport.php");
-                        ob_end_flush();
-                        exit();
+                        exit(); // MUY IMPORTANTE: Detener ejecución aquí
                         
                     } else {
                         $loginError = 'Usuario o contraseña incorrectos';
                         $debugInfo[] = "❌ No se encontró usuario con esas credenciales";
+                        writeLog("❌ Usuario NO encontrado: $usuario", 'WARNING');
                     }
                 } else {
                     $loginError = 'Error en la consulta a la base de datos';
                     $debugInfo[] = "❌ Error en la consulta SQL";
+                    writeLog("❌ Error en consulta SQL", 'ERROR');
                     $errors = sqlsrv_errors();
                     if ($errors) {
                         foreach($errors as $error) {
                             $debugInfo[] = "SQL Error: " . $error['message'];
-                            $debugInfo[] = "SQL State: " . $error['SQLSTATE'];
-                            $debugInfo[] = "Code: " . $error['code'];
+                            writeLog("SQL Error: " . $error['message'], 'ERROR');
                         }
                     }
                 }
@@ -310,26 +247,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
             } else {
                 $loginError = 'Error de conexión a la base de datos';
                 $debugInfo[] = "❌ No se pudo conectar a SQL Server";
+                writeLog("❌ Error de conexión a SQL Server", 'ERROR');
                 $errors = sqlsrv_errors();
                 if ($errors) {
                     foreach($errors as $error) {
                         $debugInfo[] = "Connection Error: " . $error['message'];
-                        $debugInfo[] = "Connection State: " . $error['SQLSTATE'];
-                        $debugInfo[] = "Code: " . $error['code'];
+                        writeLog("Connection Error: " . $error['message'], 'ERROR');
                     }
                 } else {
                     $debugInfo[] = "No hay información específica del error de conexión";
+                    writeLog("Sin información de error de conexión", 'ERROR');
                 }
             }
         }
     }
 }
 
-// SI LLEGAMOS AQUÍ, ENTONCES MOSTRAMOS EL HTML DEL LOGIN
-// Limpiar cualquier sesión residual
-session_unset();
-session_destroy();
-session_start(); // Reiniciar sesión limpia
+// SI LLEGAMOS AQUÍ, MOSTRAMOS EL HTML DEL LOGIN
+// Solo limpiar sesión si NO hubo login exitoso
+writeLog("📄 Mostrando formulario de login", 'INFO');
+
+// Limpiar cualquier sesión residual (solo si no hay login válido)
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+    session_unset();
+    session_destroy();
+    session_start();
+}
 
 // Regenerar CSRF token para el nuevo formulario
 $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
