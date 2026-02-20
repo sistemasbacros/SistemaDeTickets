@@ -54,7 +54,9 @@ $connectionInfo = array(
     "Database" => $DB_DATABASE,
     "UID" => $DB_USERNAME,
     "PWD" => $DB_PASSWORD,
-    "CharacterSet" => "UTF-8"
+    "CharacterSet" => "UTF-8",
+    "TrustServerCertificate" => true,
+    "Encrypt" => true
 );
 
 $conn = sqlsrv_connect($serverName, $connectionInfo);

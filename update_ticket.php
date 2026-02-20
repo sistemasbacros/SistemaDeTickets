@@ -147,7 +147,9 @@ try {
         "UID" => $DB_USERNAME,
         "PWD" => $DB_PASSWORD,
         "CharacterSet" => "UTF-8",
-        "ReturnDatesAsStrings" => true
+        "ReturnDatesAsStrings" => true,
+        "TrustServerCertificate" => true,
+        "Encrypt" => true
     );
     
     $conn = sqlsrv_connect($serverName, $connectionInfo);

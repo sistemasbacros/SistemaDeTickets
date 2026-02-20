@@ -202,7 +202,9 @@ function determinarResponsableFinal($responsable_principal, $subtipo) {
         "Database"=>$DB_DATABASE,
         "UID"=>$DB_USERNAME,
         "PWD"=>$DB_PASSWORD,
-        "CharacterSet" => "UTF-8"
+        "CharacterSet" => "UTF-8",
+        "TrustServerCertificate" => true,
+        "Encrypt" => true
     );
     $conn = sqlsrv_connect($serverName, $connectionInfo);
     
@@ -2134,7 +2136,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     "Database"=>$DB_DATABASE,
     "UID"=>$DB_USERNAME,
     "PWD"=>$DB_PASSWORD,
-    "CharacterSet" => "UTF-8"
+    "CharacterSet" => "UTF-8",
+    "TrustServerCertificate" => true,
+    "Encrypt" => true
   );
   $conn = sqlsrv_connect($serverName, $connectionInfo);
 

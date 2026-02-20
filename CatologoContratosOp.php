@@ -99,7 +99,7 @@
 require_once __DIR__ . '/config.php';
 
 $serverName = $DB_HOST_OPERACIONES;
-$connectionInfo = array( "Database"=>$DB_DATABASE_OPERACIONES, "UID"=>$DB_USERNAME_OPERACIONES, "PWD"=>$DB_PASSWORD_OPERACIONES, "CharacterSet" => "UTF-8");
+$connectionInfo = array( "Database"=>$DB_DATABASE_OPERACIONES, "UID"=>$DB_USERNAME_OPERACIONES, "PWD"=>$DB_PASSWORD_OPERACIONES, "CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
 $conn = sqlsrv_connect( $serverName, $connectionInfo);
 
 // if( $conn ) {
