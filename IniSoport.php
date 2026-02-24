@@ -113,13 +113,14 @@
  */
 
 // VERIFICACIÓN DE SESIÓN MEJORADA - VERSIÓN FINAL CON TODAS LAS VARIANTES DE PRIORIDAD
-session_start();
 
-// Configuración de seguridad de sesión
+// Configuración de seguridad de sesión (debe ir antes de session_start)
 ini_set('session.cookie_httponly', 1);
 ini_set('session.cookie_secure', 0);
 ini_set('session.use_strict_mode', 1);
 ini_set('session.cookie_samesite', 'Strict');
+
+session_start();
 
 // Headers más estrictos para prevenir cache
 header("Cache-Control: no-cache, no-store, must-revalidate, max-age=0");
