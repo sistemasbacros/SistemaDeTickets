@@ -404,7 +404,7 @@ table.on('click', 'tbody tr', (e) => {
  
 			// Mostramos el texto devuelto por el archivo php
 			// alert(data);
-						// window.location.href = 'http://192.168.100.95/TicketBacros/AsigBien.php'; //Will take you to Google.
+						// window.location.href = 'AsigBien.php';
 						
 						
 						window.open('AsigBien1.php?','Asigna tu ticket','toolbars=0,width=600,height=500,right=200, top=200,scrollbars=1,resizable=5');
@@ -427,7 +427,7 @@ table.on('click', 'tbody tr', (e) => {
  
 			// Mostramos el texto devuelto por el archivo php
 			// alert(data);
-						// window.location.href = 'http://192.168.100.95/TicketBacros/AsigBien.php'; //Will take you to Google.
+						// window.location.href = 'AsigBien.php';
 						
 						
 						window.open('AsigBien2.php?','Asigna tu ticket','toolbars=0,width=600,height=500,right=200, top=200,scrollbars=1,resizable=5');
