@@ -119,8 +119,8 @@
     function Funcion(){
       var u = document.getElementById("inputUser").value;
       var p = document.getElementById("inputPass").value;
-      if(u==="TI"&&p==="TI01") window.location.replace("http://192.168.100.95/TicketBacros/dashti.php");
-      else if(u==="TI"&&p==="TI02") window.location.replace("http://192.168.100.95/TicketBacros/contact.html");
+      if(u==="TI"&&p==="TI01") window.location.replace("dashti.php");
+      else if(u==="TI"&&p==="TI02") window.location.replace("contact.html");
       else alert("Por favor ingrese información válida");
     }
   </script>

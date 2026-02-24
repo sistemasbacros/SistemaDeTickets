@@ -20,7 +20,7 @@
  * - CSS CDN: Bootstrap 4.3.1
  *
  * @external_links
- * - http://192.168.100.95/TicketBacros/M/website-menu-05/index.html (inicio)
+ * - M/website-menu-05/index.html (inicio)
  *
  * @ui_components
  * - Formulario con validación de campos requeridos
