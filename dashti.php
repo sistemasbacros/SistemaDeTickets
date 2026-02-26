@@ -58,7 +58,7 @@
 
 header('Content-Type: text/html; charset=utf-8');
 require_once __DIR__ . '/config.php';
-$serverName = $DB_HOST;
+$serverName = $DB_SERVER;
 $connectionOptions = [
   "Database" => $DB_DATABASE,
   "UID" => $DB_USERNAME,

@@ -141,7 +141,7 @@ if (empty($id_ticket) || empty($responsable) || empty($estatus)) {
 
 try {
     // Conectar a la base de datos
-    $serverName = $DB_HOST;
+    $serverName = $DB_SERVER;
     $connectionInfo = array(
         "Database" => $DB_DATABASE,
         "UID" => $DB_USERNAME,

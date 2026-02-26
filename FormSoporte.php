@@ -156,7 +156,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_ticket'])) {
         $name10 = test_input($_POST["tik"]);
         
         // Insertar en la base de datos
-        $serverName = $DB_HOST;
+        $serverName = $DB_SERVER;
         $connectionInfo = array(
             "Database" => $DB_DATABASE,
             "UID" => $DB_USERNAME,
