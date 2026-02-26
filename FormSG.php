@@ -367,7 +367,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   
 
 
-  $serverName = $DB_HOST;
+  $serverName = $DB_SERVER;
   $connectionInfo = array("Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
   $conn = sqlsrv_connect($serverName, $connectionInfo);
 

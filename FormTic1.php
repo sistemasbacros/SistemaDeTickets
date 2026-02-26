@@ -197,7 +197,7 @@ function determinarResponsableFinal($responsable_principal, $subtipo) {
     }
     
     // Conectar a la base de datos para verificar carga de trabajo
-    $serverName = $DB_HOST;
+    $serverName = $DB_SERVER;
     $connectionInfo = array(
         "Database"=>$DB_DATABASE,
         "UID"=>$DB_USERNAME,
@@ -2131,7 +2131,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $hora_actual_completa = date('Y-m-d H:i:s') . '.0000000'; // Formato: 2026-02-17 11:45:51.0000000
   
   // Insertar en la base de datos con estatus "En proceso", persona asignada y fecha/hora de proceso
-  $serverName = $DB_HOST;
+  $serverName = $DB_SERVER;
   $connectionInfo = array(
     "Database"=>$DB_DATABASE,
     "UID"=>$DB_USERNAME,

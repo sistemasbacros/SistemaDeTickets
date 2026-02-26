@@ -9,6 +9,7 @@
 // ─── Base de datos: Ticket (módulo TI / Servicios Generales) ─────────────────
 $DB_HOST     = getenv('DB_HOST');
 $DB_PORT     = getenv('DB_PORT')     ?: '1433';
+$DB_SERVER   = $DB_HOST . ',' . $DB_PORT; // formato requerido por sqlsrv_connect
 $DB_DATABASE = getenv('DB_DATABASE');
 $DB_USERNAME = getenv('DB_USERNAME');
 $DB_PASSWORD = getenv('DB_PASSWORD');

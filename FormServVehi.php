@@ -47,7 +47,7 @@
 
 // ----------------- CONEXIÓN Y PROCESAMIENTO DEL FORMULARIO -----------------
 require_once __DIR__ . '/config.php';
-$serverName = $DB_HOST;
+$serverName = $DB_SERVER;
 $connectionInfo = array(
     "Database" => $DB_DATABASE,
     "UID" => $DB_USERNAME,
