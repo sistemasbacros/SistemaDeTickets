@@ -142,7 +142,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                 $debugInfo[] = "❌ ERROR: Variable de entorno DB_USERNAME no está definida";
             }
             
-            $serverName = $DB_HOST ?: 'SERVIDOR_NO_DEFINIDO';
+            $dbPort = $DB_PORT ?: '1433';
+            $serverName = ($DB_HOST ?: 'SERVIDOR_NO_DEFINIDO') . ',' . $dbPort;
             $dbName = $DB_DATABASE_COMEDOR ?: 'Comedor';
             $dbUser = $DB_USERNAME ?: 'USUARIO_NO_DEFINIDO';
             $dbPass = $DB_PASSWORD ?: '';
