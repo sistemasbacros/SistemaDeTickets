@@ -3,8 +3,8 @@ name: Deploy to Test Server
 on:
   push:
     branches:
-      - dev # Test se despliega desde develop
-  workflow_dispatch: # Permite ejecutar manualmente desde GitHub UI
+      - dev
+  workflow_dispatch:
 
 env:
   DEPLOY_PATH: C:\deploy\SistemaDeTicketsTest
@@ -12,406 +12,201 @@ env:
 
 jobs:
   deploy:
-    name: Build and Deploy to Test Server
-    runs-on: [self-hosted, Windows, X64, test, tickets] # Ejecuta solo en runners Windows con label "test" y "tickets"
+    name: Deploy TEST (dev branch)
+    runs-on: [self-hosted, Windows, X64, test, tickets]
 
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           clean: false
 
-      - name: 📂 Create deploy directory
+      - name: Create deploy directory
+        shell: powershell
         run: |
           if (-not (Test-Path "$env:DEPLOY_PATH")) {
-            New-Item -Path "$env:DEPLOY_PATH" -ItemType Directory -Force
-            Write-Host "OK: Directorio de despliegue creado"
-          }
-        shell: powershell
-
-      - name: 📋 Copy .env if not exists
-        run: |
-          if (-not (Test-Path "$env:DEPLOY_PATH\.env")) {
-            if (Test-Path '.env.example') {
-              Copy-Item -Path '.env.example' -Destination "$env:DEPLOY_PATH\.env" -Force
-              Write-Host "WARNING: Archivo .env creado desde template"
-              Write-Host "WARNING: IMPORTANTE: Configurar manualmente con credenciales de TEST"
-            }
+            New-Item -Path "$env:DEPLOY_PATH" -ItemType Directory -Force | Out-Null
+            Write-Host "OK: Directorio creado: $env:DEPLOY_PATH"
           } else {
-            Write-Host "INFO: Archivo .env ya existe"
+            Write-Host "OK: Directorio ya existe: $env:DEPLOY_PATH"
           }
+
+      - name: Generate .env from GitHub Secrets
         shell: powershell
-
-      - name: 🚀 Deploy files to test server
+        env:
+          DB_HOST_TEST:            ${{ secrets.TEST_DB_HOST }}
+          DB_PORT_TEST:            ${{ secrets.TEST_DB_PORT }}
+          DB_DATABASE_TEST:        ${{ secrets.TEST_DB_DATABASE }}
+          DB_DATABASE_COMEDOR_TEST: ${{ secrets.TEST_DB_DATABASE_COMEDOR }}
+          DB_USERNAME_TEST:        ${{ secrets.TEST_DB_USERNAME }}
+          DB_PASSWORD_TEST:        ${{ secrets.TEST_DB_PASSWORD }}
+          HTTP_PORT_TEST:          ${{ secrets.TEST_HTTP_PORT }}
+          SMTP_HOST:               ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:               ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME:           ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD:           ${{ secrets.SMTP_PASSWORD }}
+          ADMIN_EMAIL:             ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_NAME:              ${{ secrets.ADMIN_NAME }}
         run: |
-          Write-Host "INFO: Desplegando archivos..."
-          Write-Host "INFO: Directorio fuente: $(Get-Location)"
-          Write-Host "INFO: Directorio destino: $env:DEPLOY_PATH"
-          Write-Host ""
-          Write-Host "=== DIAGNOSTICO DE DIRECTORIO ==="
-          Write-Host "Contenido del directorio actual:"
-          Get-ChildItem -Path . -Force | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
-          Write-Host ""
-          Write-Host "Buscando Dockerfile recursivamente:"
-          Get-ChildItem -Path . -Filter "Dockerfile" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
-          Write-Host ""
+          $envContent = @"
+# Generado automaticamente por CI/CD - NO editar manualmente
+# Ambiente: TEST | Rama: dev | Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 
-          # Verificar que estamos en el directorio correcto
+APP_ENV=test
+HTTP_PORT=8006
+HTTP_PORT_TEST=$env:HTTP_PORT_TEST
+
+DB_HOST=$env:DB_HOST_TEST
+DB_PORT=$env:DB_PORT_TEST
+DB_DATABASE=$env:DB_DATABASE_TEST
+DB_DATABASE_COMEDOR=Comedor
+DB_USERNAME=$env:DB_USERNAME_TEST
+DB_PASSWORD=$env:DB_PASSWORD_TEST
+
+DB_HOST_TEST=$env:DB_HOST_TEST
+DB_PORT_TEST=$env:DB_PORT_TEST
+DB_DATABASE_TEST=$env:DB_DATABASE_TEST
+DB_DATABASE_COMEDOR_TEST=$env:DB_DATABASE_COMEDOR_TEST
+DB_USERNAME_TEST=$env:DB_USERNAME_TEST
+DB_PASSWORD_TEST=$env:DB_PASSWORD_TEST
+
+SMTP_HOST=$env:SMTP_HOST
+SMTP_PORT=$env:SMTP_PORT
+SMTP_USERNAME=$env:SMTP_USERNAME
+SMTP_PASSWORD=$env:SMTP_PASSWORD
+
+ADMIN_EMAIL=$env:ADMIN_EMAIL
+ADMIN_NAME=$env:ADMIN_NAME
+
+TZ=America/Mexico_City
+"@
+          $envPath = Join-Path $env:DEPLOY_PATH ".env"
+          $envContent | Out-File -FilePath $envPath -Encoding utf8 -Force
+          Write-Host "OK: .env generado en $envPath"
+
+      - name: Deploy files
+        shell: powershell
+        run: |
           if (-not (Test-Path "Dockerfile")) {
-            Write-Host "ERROR: Dockerfile no encontrado en directorio actual"
-            Write-Host "ERROR: Intentando buscar en subdirectorios..."
-
-            $dockerfilePath = Get-ChildItem -Path . -Filter "Dockerfile" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($dockerfilePath) {
-              Write-Host "WARNING: Dockerfile encontrado en: $($dockerfilePath.FullName)"
-              Write-Host "ERROR: El checkout puede estar en un directorio incorrecto"
-            }
+            Write-Host "ERROR: Dockerfile no encontrado. Verifica el checkout."
             exit 1
           }
 
-          # Copiar todos los archivos excepto .env y logs
-          $excludeItems = @('.env', 'nginx/logs', '.git', 'README.md')
+          $excludePatterns = @('.env', 'nginx\logs', '.git')
           $fileCount = 0
 
-          Get-ChildItem -Path "." -Recurse | ForEach-Object {
+          Get-ChildItem -Path "." -Recurse -File | ForEach-Object {
+            $relativePath = $_.FullName.Substring((Get-Location).Path.Length + 1)
             $shouldExclude = $false
-            foreach ($exclude in $excludeItems) {
-              if ($_.FullName -like "*$exclude*") {
+            foreach ($pattern in $excludePatterns) {
+              if ($relativePath -like "*$pattern*") {
                 $shouldExclude = $true
                 break
               }
             }
-
-            if (-not $shouldExclude -and -not $_.PSIsContainer) {
-              $relativePath = $_.FullName.Substring((Get-Location).Path.Length + 1)
+            if (-not $shouldExclude) {
               $destPath = Join-Path $env:DEPLOY_PATH $relativePath
               $destDir = Split-Path $destPath -Parent
-
               if (-not (Test-Path $destDir)) {
                 New-Item -Path $destDir -ItemType Directory -Force | Out-Null
               }
-
               Copy-Item -Path $_.FullName -Destination $destPath -Force
               $fileCount++
-
-              # Log archivos críticos
-              if ($_.Name -in @('Dockerfile', 'docker-compose.yml', 'docker-compose.test.yml')) {
-                Write-Host "OK: Copiado $($_.Name) -> $destPath"
-              }
             }
           }
+          Write-Host "OK: $fileCount archivos desplegados"
 
-          Write-Host "OK: $fileCount archivos desplegados en $env:DEPLOY_PATH"
-
-          # Verificar que los archivos críticos fueron copiados
-          $criticalFiles = @('Dockerfile', 'docker-compose.test.yml')
-          foreach ($file in $criticalFiles) {
-            $filePath = Join-Path $env:DEPLOY_PATH $file
-            if (Test-Path $filePath) {
-              Write-Host "OK: Verificado $file en destino"
-            } else {
-              Write-Host "ERROR: $file NO fue copiado al destino"
+          # Verificar archivos criticos
+          @('Dockerfile', 'docker-compose.test.yml') | ForEach-Object {
+            $filePath = Join-Path $env:DEPLOY_PATH $_
+            if (-not (Test-Path $filePath)) {
+              Write-Host "ERROR: Archivo critico no encontrado: $_"
               exit 1
             }
+            Write-Host "OK: Verificado $_"
           }
+
+      - name: Verify Docker
         shell: powershell
-
-      - name: 🐳 Verify Docker installation
         run: |
-          Write-Host "INFO: Verificando instalación de Docker..."
-
-          # Verificar si Docker está disponible
-          $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
-          if (-not $dockerCmd) {
-            Write-Host "ERROR: Docker no está instalado o no está en el PATH"
-            Write-Host "ERROR: Por favor instala Docker Engine en Windows Server"
+          if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+            Write-Host "ERROR: Docker no está en el PATH"
             exit 1
           }
+          docker compose version | Out-Null
+          if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: Docker Compose no disponible"; exit 1 }
+          docker ps | Out-Null
+          if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: Docker daemon no responde"; exit 1 }
+          Write-Host "OK: Docker listo"
 
-          # Obtener versión de Docker
-          try {
-            $dockerVersion = docker --version 2>&1
-            if ($LASTEXITCODE -ne 0) {
-              throw "Docker no respondió correctamente"
-            }
-            Write-Host "OK: Docker instalado: $dockerVersion"
-          } catch {
-            Write-Host "ERROR: Docker está instalado pero no responde"
-            Write-Host "ERROR: Verifica que el servicio Docker esté corriendo: Get-Service docker"
-            exit 1
-          }
-
-          # Verificar Docker Compose
-          try {
-            $composeVersion = docker compose version 2>&1
-            if ($LASTEXITCODE -ne 0) {
-              throw "Docker Compose no respondió correctamente"
-            }
-            Write-Host "OK: Docker Compose instalado: $composeVersion"
-          } catch {
-            Write-Host "ERROR: Docker Compose no está disponible"
-            Write-Host "ERROR: Asegúrate de tener Docker con plugin de Compose instalado"
-            exit 1
-          }
-
-          # Verificar conectividad con el daemon de Docker
-          try {
-            docker ps > $null 2>&1
-            if ($LASTEXITCODE -eq 0) {
-              Write-Host "OK: Docker daemon está corriendo y accesible"
-            } else {
-              Write-Host "WARNING: Docker daemon no responde. Intentando iniciar el servicio..."
-              Start-Service docker -ErrorAction Stop
-              Start-Sleep -Seconds 5
-              docker ps > $null 2>&1
-              if ($LASTEXITCODE -eq 0) {
-                Write-Host "OK: Servicio Docker iniciado correctamente"
-              } else {
-                throw "No se puede conectar al daemon de Docker"
-              }
-            }
-          } catch {
-            Write-Host "ERROR: No se puede conectar al daemon de Docker"
-            Write-Host "ERROR: Verifica que el servicio esté corriendo: Get-Service docker"
-            Write-Host "ERROR: Si es necesario, inicia el servicio: Start-Service docker"
-            exit 1
-          }
-        shell: powershell
-
-      - name: 🛑 Stop current containers
-        run: |
-          cd $env:DEPLOY_PATH
-
-          $composeFile = Join-Path $env:DEPLOY_PATH $env:COMPOSE_FILE
-          if (Test-Path $composeFile) {
-            Write-Host "INFO: Deteniendo contenedores existentes..."
-            try {
-              docker compose -f $env:COMPOSE_FILE down
-              $downExitCode = $LASTEXITCODE
-              if ($downExitCode -eq 0) {
-                Write-Host "OK: Contenedores detenidos"
-              } else {
-                Write-Host "WARNING: Error al detener contenedores (Exit code: $downExitCode)"
-                Write-Host "INFO: Intentando forzar limpieza de contenedores..."
-                docker ps -a --filter "name=tickets_*_test" --format "{{.ID}}" | ForEach-Object {
-                  docker rm -f $_ 2>&1 | Out-Null
-                }
-                Write-Host "OK: Limpieza forzada completada"
-              }
-            } catch {
-              Write-Host "WARNING: No se pudieron detener los contenedores: $_"
-              Write-Host "INFO: Continuando con el despliegue..."
-            }
-          } else {
-            Write-Host "INFO: No hay archivo compose previo"
-          }
+      - name: Stop existing containers
         shell: powershell
         continue-on-error: true
-
-      - name: 🏗️ Build Docker images
         run: |
-          cd $env:DEPLOY_PATH
-
-          Write-Host "INFO: Construyendo imágenes Docker..."
-          Write-Host "INFO: Directorio actual: $(Get-Location)"
-          Write-Host "INFO: Archivo compose: $env:COMPOSE_FILE"
-
-          # Verificar que el Dockerfile existe
-          if (-not (Test-Path "Dockerfile")) {
-            Write-Host "ERROR: Dockerfile no encontrado en $(Get-Location)"
-            Get-ChildItem -Path . -Force | Select-Object Name, LastWriteTime | Format-Table -AutoSize
-            exit 1
+          Set-Location $env:DEPLOY_PATH
+          if (Test-Path $env:COMPOSE_FILE) {
+            docker compose -f $env:COMPOSE_FILE down
+            Write-Host "OK: Contenedores detenidos"
           }
 
-          # Construir sin caché para asegurar última versión
+      - name: Build and start containers
+        shell: powershell
+        run: |
+          Set-Location $env:DEPLOY_PATH
           docker compose -f $env:COMPOSE_FILE build --no-cache
-          $buildExitCode = $LASTEXITCODE
-
-          if ($buildExitCode -eq 0) {
-            Write-Host "OK: Imágenes construidas exitosamente"
-          } else {
-            Write-Host "ERROR: Error al construir imágenes (Exit code: $buildExitCode)"
-            Write-Host "ERROR: Revisa los logs arriba para más detalles"
-            Write-Host ""
-            Write-Host "--- INFORMACION DE DIAGNOSTICO ---"
-            Write-Host "Docker version:"
-            docker --version
-            Write-Host ""
-            Write-Host "Docker info:"
-            docker info 2>&1 | Select-String -Pattern "Server Version|Operating System|OSType|Architecture"
-            exit 1
-          }
-        shell: powershell
-
-      - name: 🚀 Start containers
-        run: |
-          cd $env:DEPLOY_PATH
-
-          Write-Host "INFO: Iniciando contenedores..."
+          if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: Build fallido"; exit 1 }
           docker compose -f $env:COMPOSE_FILE up -d
+          if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: Error al iniciar contenedores"; exit 1 }
+          Write-Host "OK: Contenedores iniciados"
 
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "OK: Contenedores iniciados exitosamente"
-          } else {
-            Write-Host "ERROR: Error al iniciar contenedores"
-            exit 1
-          }
+      - name: Verify containers
         shell: powershell
-
-      - name: 🔍 Verify containers status
         run: |
-          cd $env:DEPLOY_PATH
-
-          Write-Host "INFO: Verificando estado de contenedores..."
+          Set-Location $env:DEPLOY_PATH
           Start-Sleep -Seconds 5
-
           $containers = docker compose -f $env:COMPOSE_FILE ps --format json | ConvertFrom-Json
-
           $allRunning = $true
-          foreach ($container in $containers) {
-            if ($container.State -ne "running") {
-              Write-Host "ERROR: Contenedor $($container.Service) no está corriendo. Estado: $($container.State)"
+          foreach ($c in $containers) {
+            if ($c.State -ne "running") {
+              Write-Host "ERROR: $($c.Service) no esta corriendo (estado: $($c.State))"
               $allRunning = $false
             } else {
-              Write-Host "OK: Contenedor $($container.Service) corriendo correctamente"
+              Write-Host "OK: $($c.Service) corriendo"
             }
           }
-
           if (-not $allRunning) {
-            Write-Host "ERROR: Algunos contenedores no están corriendo correctamente"
-            Write-Host "--- LOGS DE NGINX ---"
-            docker compose -f $env:COMPOSE_FILE logs nginx
-            Write-Host "--- LOGS DE PHP ---"
-            docker compose -f $env:COMPOSE_FILE logs php
+            docker compose -f $env:COMPOSE_FILE logs
             exit 1
           }
+
+      - name: Clean old images
         shell: powershell
-
-      - name: 🏥 Health check
         continue-on-error: true
+        run: docker image prune -f
+
+      - name: Deployment summary
+        shell: powershell
         run: |
-          cd $env:DEPLOY_PATH
-
-          Write-Host "INFO: Verificando salud de los contenedores..."
-          Start-Sleep -Seconds 5
-
-          # Verificar que los contenedores estén running
-          $containers = docker compose -f $env:COMPOSE_FILE ps --format json | ConvertFrom-Json
-
-          $allHealthy = $true
-          foreach ($container in $containers) {
-            if ($container.State -eq "running") {
-              Write-Host "OK: Contenedor $($container.Service) está corriendo"
-            } else {
-              Write-Host "WARNING: Contenedor $($container.Service) no está corriendo. Estado: $($container.State)"
-              $allHealthy = $false
-            }
-          }
-
-          if ($allHealthy) {
-            Write-Host "OK: Todos los contenedores están corriendo correctamente"
-          } else {
-            Write-Host "WARNING: Algunos contenedores tienen problemas"
-          }
-
-          # Leer puerto del .env para informar
-          $port = 9006
-          if (Test-Path "$env:DEPLOY_PATH\.env") {
-            $envContent = Get-Content "$env:DEPLOY_PATH\.env"
-            foreach ($line in $envContent) {
-              if ($line -match "HTTP_PORT_TEST=(\d+)") {
-                $port = $matches[1]
-                break
-              }
-            }
-          }
-
+          $port = (Get-Content "$env:DEPLOY_PATH\.env" | Select-String "HTTP_PORT_TEST=(\d+)").Matches[0].Groups[1].Value
           Write-Host ""
-          Write-Host "INFO: Aplicacion disponible en: http://localhost:$port"
-          Write-Host "INFO: Si necesitas verificar logs: docker compose -f $env:COMPOSE_FILE logs -f"
-
-          # Intentar verificar HTTP (opcional)
-          $maxAttempts = 5
-          $attempt = 0
-
-          while ($attempt -lt $maxAttempts) {
-            try {
-              Start-Sleep -Seconds 2
-              $response = Invoke-WebRequest -Uri "http://localhost:$port" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-
-              if ($response.StatusCode -eq 200) {
-                Write-Host "OK: Servidor HTTP respondiendo correctamente: $($response.StatusCode)"
-                break
-              }
-            } catch {
-              $attempt++
-              if ($attempt -lt $maxAttempts) {
-                Write-Host "INFO: Intento $attempt/$maxAttempts - Esperando respuesta HTTP..."
-              }
-            }
-          }
-
-          if ($attempt -ge $maxAttempts) {
-            Write-Host ""
-            Write-Host "INFO: No se pudo verificar HTTP después de $maxAttempts intentos"
-            Write-Host "INFO: Esto es normal si la aplicación requiere configuración adicional"
-            Write-Host "INFO: Los contenedores están corriendo. Verifica manualmente en: http://localhost:$port"
-            Write-Host ""
-          } else {
-            Write-Host "OK: Verificación HTTP exitosa"
-          }
-        shell: powershell
-
-      - name: 🧹 Clean old images
-        run: |
-          Write-Host "INFO: Limpiando imágenes antiguas..."
-          docker image prune -f
-          Write-Host "OK: Imágenes antiguas eliminadas"
-        shell: powershell
-        continue-on-error: true
-
-      - name: 📊 Deployment summary
-        run: |
-          cd $env:DEPLOY_PATH
-
-          # Leer el puerto del archivo .env
-          $envContent = Get-Content "$env:DEPLOY_PATH\.env"
-          $port = 9006
-          foreach ($line in $envContent) {
-            if ($line -match "HTTP_PORT_TEST=(\d+)") {
-              $port = $matches[1]
-              break
-            }
-          }
-
-          Write-Host ''
           Write-Host "============================================================="
-          Write-Host "     DESPLIEGUE EN TEST COMPLETADO EXITOSAMENTE"
+          Write-Host "  DESPLIEGUE TEST COMPLETADO"
           Write-Host "============================================================="
-          Write-Host ''
-          Write-Host "Ubicacion: $env:DEPLOY_PATH"
-          Write-Host "URL: http://localhost:$port"
-          Write-Host "Fecha: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")"
-          Write-Host "Commit: $env:GITHUB_SHA"
-          Write-Host "Autor: $env:GITHUB_ACTOR"
-          Write-Host ''
-          Write-Host "Contenedores corriendo:"
+          Write-Host "  URL:    http://localhost:$port"
+          Write-Host "  Commit: $env:GITHUB_SHA"
+          Write-Host "  Autor:  $env:GITHUB_ACTOR"
+          Write-Host "  Fecha:  $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+          Write-Host "============================================================="
           docker compose -f $env:COMPOSE_FILE ps
-          Write-Host ''
-          Write-Host "OK: Servidor de TEST actualizado y corriendo"
-          Write-Host ''
-        shell: powershell
 
-      - name: 📧 Notify on failure
+      - name: Notify on failure
         if: failure()
         shell: powershell
         run: |
-          Write-Host ''
-          Write-Host '============================================================='
-          Write-Host '          DESPLIEGUE EN TEST FALLO'
-          Write-Host '============================================================='
-          Write-Host ''
-          Write-Host 'INFO: Revisa los logs del workflow en GitHub Actions'
-          Write-Host 'INFO: Revisa los logs de contenedores con:'
-          Write-Host ('       docker compose -f ' + $env:COMPOSE_FILE + ' logs')
-          Write-Host ''
+          Write-Host "============================================================="
+          Write-Host "  DESPLIEGUE TEST FALLO - Commit: $env:GITHUB_SHA"
+          Write-Host "============================================================="
+          Write-Host "  Revisa los logs en GitHub Actions"
+          Write-Host "  Logs de contenedores:"
+          Write-Host "    cd $env:DEPLOY_PATH"
+          Write-Host "    docker compose -f $env:COMPOSE_FILE logs"
