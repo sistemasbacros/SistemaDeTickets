@@ -9,8 +9,8 @@ services:
       - ./php/custom.ini:/usr/local/etc/php/conf.d/custom.ini
     environment:
       - APP_ENV=test
-      - DB_HOST=${DB_HOST_TEST}
-      - DB_PORT=${DB_PORT_TEST:-1433}
+      - DB_HOST=mssql-comedor
+      - DB_PORT=1433
       - DB_DATABASE=${DB_DATABASE_TEST}
       - DB_DATABASE_COMEDOR=${DB_DATABASE_COMEDOR_TEST:-Comedor}
       - DB_USERNAME=${DB_USERNAME_TEST}
@@ -22,6 +22,7 @@ services:
       - TZ=America/Mexico_City
     networks:
       - tickets_network_test
+      - sqlserver-network
     restart: unless-stopped
 
   nginx:
@@ -43,3 +44,5 @@ networks:
   tickets_network_test:
     driver: bridge
     name: tickets_network_test
+  sqlserver-network:
+    external: true

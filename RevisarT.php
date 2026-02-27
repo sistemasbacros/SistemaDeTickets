@@ -130,7 +130,7 @@ $sql = "SELECT
     [Asunto],
     [Mensaje],
     [Adjuntos],
-    [Fecha] = LTRIM(RTRIM(CAST(CONVERT(DATE, fecha, 103) AS NVARCHAR))),
+    [Fecha] = LTRIM(RTRIM(CAST(TRY_CONVERT(DATE, fecha, 103) AS NVARCHAR))),
     [Hora],
     [Id_Ticket],
     [Estatus],
@@ -139,15 +139,15 @@ $sql = "SELECT
     [imagen_nombre],
     [imagen_tipo],
     [imagen_size]
-FROM [dbo].[T3] 
-WHERE 
-    (CONVERT(DATE, fecha, 103) BETWEEN ? AND ?) 
+FROM [dbo].[T3]
+WHERE
+    (TRY_CONVERT(DATE, fecha, 103) BETWEEN ? AND ?)
     AND (Nombre LIKE ? OR ? = '%')
     AND (
-        (Nombre LIKE ?) 
+        (Nombre LIKE ?)
         OR (Nombre LIKE ?)
     )
-ORDER BY CONVERT(DATE, fecha, 103) DESC";
+ORDER BY TRY_CONVERT(DATE, fecha, 103) DESC";
 
 // Parámetros base
 $params = array(
