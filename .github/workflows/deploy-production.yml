@@ -48,32 +48,32 @@ jobs:
           ADMIN_EMAIL:        ${{ secrets.ADMIN_EMAIL }}
           ADMIN_NAME:         ${{ secrets.ADMIN_NAME }}
         run: |
-          $envContent = @"
-# Generado automaticamente por CI/CD - NO editar manualmente
-# Ambiente: PRODUCCION | Rama: main | Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-
-APP_ENV=production
-HTTP_PORT=$env:HTTP_PORT
-
-DB_HOST=$env:DB_HOST
-DB_PORT=$env:DB_PORT
-DB_DATABASE=$env:DB_DATABASE
-DB_DATABASE_COMEDOR=$env:DB_DATABASE_COMEDOR
-DB_USERNAME=$env:DB_USERNAME
-DB_PASSWORD=$env:DB_PASSWORD
-
-SMTP_HOST=$env:SMTP_HOST
-SMTP_PORT=$env:SMTP_PORT
-SMTP_USERNAME=$env:SMTP_USERNAME
-SMTP_PASSWORD=$env:SMTP_PASSWORD
-
-ADMIN_EMAIL=$env:ADMIN_EMAIL
-ADMIN_NAME=$env:ADMIN_NAME
-
-TZ=America/Mexico_City
-"@
+          $lines = @(
+            "# Generado automaticamente por CI/CD - NO editar manualmente",
+            "# Ambiente: PRODUCCION | Rama: main | Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+            "",
+            "APP_ENV=production",
+            "HTTP_PORT=$env:HTTP_PORT",
+            "",
+            "DB_HOST=$env:DB_HOST",
+            "DB_PORT=$env:DB_PORT",
+            "DB_DATABASE=$env:DB_DATABASE",
+            "DB_DATABASE_COMEDOR=$env:DB_DATABASE_COMEDOR",
+            "DB_USERNAME=$env:DB_USERNAME",
+            "DB_PASSWORD=$env:DB_PASSWORD",
+            "",
+            "SMTP_HOST=$env:SMTP_HOST",
+            "SMTP_PORT=$env:SMTP_PORT",
+            "SMTP_USERNAME=$env:SMTP_USERNAME",
+            "SMTP_PASSWORD=$env:SMTP_PASSWORD",
+            "",
+            "ADMIN_EMAIL=$env:ADMIN_EMAIL",
+            "ADMIN_NAME=$env:ADMIN_NAME",
+            "",
+            "TZ=America/Mexico_City"
+          )
           $envPath = Join-Path $env:DEPLOY_PATH ".env"
-          $envContent | Out-File -FilePath $envPath -Encoding utf8 -Force
+          $lines | Out-File -FilePath $envPath -Encoding utf8 -Force
           Write-Host "OK: .env generado en $envPath"
 
       - name: Deploy files

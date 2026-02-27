@@ -48,40 +48,40 @@ jobs:
           ADMIN_EMAIL:             ${{ secrets.ADMIN_EMAIL }}
           ADMIN_NAME:              ${{ secrets.ADMIN_NAME }}
         run: |
-          $envContent = @"
-# Generado automaticamente por CI/CD - NO editar manualmente
-# Ambiente: TEST | Rama: dev | Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-
-APP_ENV=test
-HTTP_PORT=8006
-HTTP_PORT_TEST=$env:HTTP_PORT_TEST
-
-DB_HOST=$env:DB_HOST_TEST
-DB_PORT=$env:DB_PORT_TEST
-DB_DATABASE=$env:DB_DATABASE_TEST
-DB_DATABASE_COMEDOR=Comedor
-DB_USERNAME=$env:DB_USERNAME_TEST
-DB_PASSWORD=$env:DB_PASSWORD_TEST
-
-DB_HOST_TEST=$env:DB_HOST_TEST
-DB_PORT_TEST=$env:DB_PORT_TEST
-DB_DATABASE_TEST=$env:DB_DATABASE_TEST
-DB_DATABASE_COMEDOR_TEST=$env:DB_DATABASE_COMEDOR_TEST
-DB_USERNAME_TEST=$env:DB_USERNAME_TEST
-DB_PASSWORD_TEST=$env:DB_PASSWORD_TEST
-
-SMTP_HOST=$env:SMTP_HOST
-SMTP_PORT=$env:SMTP_PORT
-SMTP_USERNAME=$env:SMTP_USERNAME
-SMTP_PASSWORD=$env:SMTP_PASSWORD
-
-ADMIN_EMAIL=$env:ADMIN_EMAIL
-ADMIN_NAME=$env:ADMIN_NAME
-
-TZ=America/Mexico_City
-"@
+          $lines = @(
+            "# Generado automaticamente por CI/CD - NO editar manualmente",
+            "# Ambiente: TEST | Rama: dev | Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+            "",
+            "APP_ENV=test",
+            "HTTP_PORT=8006",
+            "HTTP_PORT_TEST=$env:HTTP_PORT_TEST",
+            "",
+            "DB_HOST=$env:DB_HOST_TEST",
+            "DB_PORT=$env:DB_PORT_TEST",
+            "DB_DATABASE=$env:DB_DATABASE_TEST",
+            "DB_DATABASE_COMEDOR=Comedor",
+            "DB_USERNAME=$env:DB_USERNAME_TEST",
+            "DB_PASSWORD=$env:DB_PASSWORD_TEST",
+            "",
+            "DB_HOST_TEST=$env:DB_HOST_TEST",
+            "DB_PORT_TEST=$env:DB_PORT_TEST",
+            "DB_DATABASE_TEST=$env:DB_DATABASE_TEST",
+            "DB_DATABASE_COMEDOR_TEST=$env:DB_DATABASE_COMEDOR_TEST",
+            "DB_USERNAME_TEST=$env:DB_USERNAME_TEST",
+            "DB_PASSWORD_TEST=$env:DB_PASSWORD_TEST",
+            "",
+            "SMTP_HOST=$env:SMTP_HOST",
+            "SMTP_PORT=$env:SMTP_PORT",
+            "SMTP_USERNAME=$env:SMTP_USERNAME",
+            "SMTP_PASSWORD=$env:SMTP_PASSWORD",
+            "",
+            "ADMIN_EMAIL=$env:ADMIN_EMAIL",
+            "ADMIN_NAME=$env:ADMIN_NAME",
+            "",
+            "TZ=America/Mexico_City"
+          )
           $envPath = Join-Path $env:DEPLOY_PATH ".env"
-          $envContent | Out-File -FilePath $envPath -Encoding utf8 -Force
+          $lines | Out-File -FilePath $envPath -Encoding utf8 -Force
           Write-Host "OK: .env generado en $envPath"
 
       - name: Deploy files
