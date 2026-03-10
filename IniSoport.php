@@ -115,11 +115,6 @@
 // VERIFICACIÓN DE SESIÓN MEJORADA - VERSIÓN FINAL CON TODAS LAS VARIANTES DE PRIORIDAD
 
 // Configuración de seguridad de sesión (debe ir antes de session_start)
-<?php
-// ============================================
-// DASHBOARD DE REPORTES - VERSIÓN FINAL
-// CON FILTROS MEJORADOS Y EXPORTACIÓN A EXCEL CON ACENTOS CORREGIDOS
-// ============================================
 session_start();
 
 // Configuración de seguridad de sesión
