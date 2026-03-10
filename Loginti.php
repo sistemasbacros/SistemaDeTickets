@@ -60,12 +60,18 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &&
     }
 }
 
-// Destino tras login: parámetro GET "redirect" validado (solo .php del mismo proyecto)
+// Destino tras login: valida solo el nombre del archivo .php, preserva query string
 function getRedirectTarget(string $default = 'IniSoport.php'): string {
     $raw = $_GET['redirect'] ?? $_POST['redirect'] ?? '';
-    // Solo permite nombres de archivo .php sin rutas ni protocolos
-    if ($raw && preg_match('/^[A-Za-z0-9_\-]+\.php$/', $raw)) {
-        return $raw;
+    if ($raw) {
+        // Separar archivo y query string (ej: "FormNuevoUsuario.php?nombre=Juan&...")
+        $parts = explode('?', $raw, 2);
+        $file  = $parts[0];
+        $query = $parts[1] ?? '';
+        // Solo permite nombres de archivo .php sin rutas ni protocolos
+        if (preg_match('/^[A-Za-z0-9_\-]+\.php$/', $file)) {
+            return $query ? $file . '?' . $query : $file;
+        }
     }
     return $default;
 }
@@ -1191,6 +1197,7 @@ ob_end_flush();
             <form method="POST" action="" id="loginForm" autocomplete="off">
                 <!-- TOKEN CSRF OCULTO -->
                 <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($_GET['redirect'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                 
                 <div class="mb-3">
                     <label for="usuario" class="form-label">
