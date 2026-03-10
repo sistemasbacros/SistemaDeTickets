@@ -40,6 +40,10 @@ jobs:
           DB_DATABASE_COMEDOR: ${{ secrets.PROD_DB_DATABASE_COMEDOR }}
           DB_USERNAME:        ${{ secrets.PROD_DB_USERNAME }}
           DB_PASSWORD:        ${{ secrets.PROD_DB_PASSWORD }}
+          DB_HOST_COMERCIAL:        ${{ secrets.PROD_DB_HOST_COMERCIAL }}
+          DB_DATABASE_COMERCIAL:    ${{ secrets.PROD_DB_DATABASE_COMERCIAL }}
+          DB_USERNAME_COMERCIAL:    ${{ secrets.PROD_DB_USERNAME_COMERCIAL }}
+          DB_PASSWORD_COMERCIAL:    ${{ secrets.PROD_DB_PASSWORD_COMERCIAL }}
           HTTP_PORT:          ${{ secrets.PROD_HTTP_PORT }}
           SMTP_HOST:          ${{ secrets.SMTP_HOST }}
           SMTP_PORT:          ${{ secrets.SMTP_PORT }}
@@ -61,6 +65,11 @@ jobs:
             "DB_DATABASE_COMEDOR=$env:DB_DATABASE_COMEDOR",
             "DB_USERNAME=$env:DB_USERNAME",
             "DB_PASSWORD=$env:DB_PASSWORD",
+            "",
+            "DB_HOST_COMERCIAL=$env:DB_HOST_COMERCIAL",
+            "DB_DATABASE_COMERCIAL=$env:DB_DATABASE_COMERCIAL",
+            "DB_USERNAME_COMERCIAL=$env:DB_USERNAME_COMERCIAL",
+            "DB_PASSWORD_COMERCIAL=$env:DB_PASSWORD_COMERCIAL",
             "",
             "SMTP_HOST=$env:SMTP_HOST",
             "SMTP_PORT=$env:SMTP_PORT",

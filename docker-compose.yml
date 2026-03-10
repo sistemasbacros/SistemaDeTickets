@@ -15,11 +15,18 @@ services:
       - DB_DATABASE_COMEDOR=${DB_DATABASE_COMEDOR:-Comedor}
       - DB_USERNAME=${DB_USERNAME}
       - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST_COMERCIAL=${DB_HOST_COMERCIAL}
+      - DB_DATABASE_COMERCIAL=${DB_DATABASE_COMERCIAL}
+      - DB_USERNAME_COMERCIAL=${DB_USERNAME_COMERCIAL}
+      - DB_PASSWORD_COMERCIAL=${DB_PASSWORD_COMERCIAL}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - TZ=America/Mexico_City
+      - SNIPE_IT_URL=${SNIPE_IT_URL:-http://192.168.100.91}
+      - SNIPE_IT_TEST=${SNIPE_IT_TEST}
+      - PDF_API_URL=${PDF_API_URL:-http://host.docker.internal:3000}
     networks:
       - tickets_network
     restart: unless-stopped

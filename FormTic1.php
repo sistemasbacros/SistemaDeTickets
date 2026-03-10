@@ -57,6 +57,8 @@
  */
 
 // INICIO DE SESIÓN Y VERIFICACIÓN
+<?php
+// INICIO DE SESIÓN Y VERIFICACIÓN
 session_start();
 
 // Verificar si el usuario está autenticado
@@ -197,16 +199,14 @@ function determinarResponsableFinal($responsable_principal, $subtipo) {
     }
     
     // Conectar a la base de datos para verificar carga de trabajo
-    $serverName = $DB_SERVER;
+    require_once __DIR__ . '/config.php';
     $connectionInfo = array(
-        "Database"=>$DB_DATABASE,
-        "UID"=>$DB_USERNAME,
-        "PWD"=>$DB_PASSWORD,
-        "CharacterSet" => "UTF-8",
-        "TrustServerCertificate" => true,
-        "Encrypt" => true
+        "Database" => $DB_DATABASE,
+        "UID"      => $DB_USERNAME,
+        "PWD"      => $DB_PASSWORD,
+        "CharacterSet" => "UTF-8"
     );
-    $conn = sqlsrv_connect($serverName, $connectionInfo);
+    $conn = sqlsrv_connect($DB_SERVER, $connectionInfo);
     
     if ($conn) {
         // Contar tickets en proceso del responsable principal
@@ -2068,10 +2068,13 @@ function obtenerEmailResponsable($responsable) {
 require 'PHPMailer/src/PHPMailer.php';
 require 'PHPMailer/src/SMTP.php';
 require 'PHPMailer/src/Exception.php';
-require_once __DIR__ . '/config.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+
+// Configuración de correos
+define('ADMIN_EMAIL', 'tickets@bacrocorp.com');
+define('ADMIN_NAME', 'Administrador TI BacroCorp');
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
   // Variables para la imagen
@@ -2131,16 +2134,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $hora_actual_completa = date('Y-m-d H:i:s') . '.0000000'; // Formato: 2026-02-17 11:45:51.0000000
   
   // Insertar en la base de datos con estatus "En proceso", persona asignada y fecha/hora de proceso
-  $serverName = $DB_SERVER;
   $connectionInfo = array(
-    "Database"=>$DB_DATABASE,
-    "UID"=>$DB_USERNAME,
-    "PWD"=>$DB_PASSWORD,
-    "CharacterSet" => "UTF-8",
-    "TrustServerCertificate" => true,
-    "Encrypt" => true
+    "Database" => $DB_DATABASE,
+    "UID"      => $DB_USERNAME,
+    "PWD"      => $DB_PASSWORD,
+    "CharacterSet" => "UTF-8"
   );
-  $conn = sqlsrv_connect($serverName, $connectionInfo);
+  $conn = sqlsrv_connect($DB_SERVER, $connectionInfo);
 
   if ($conn) {
     $sql = "INSERT INTO T3 (
@@ -2212,7 +2212,14 @@ function sendUserConfirmationEmail($name, $email, $priority, $department, $subje
   try {
     $mail = new PHPMailer(true);
     
-    configurarSMTP($mail);
+    $mail->isSMTP();
+    $mail->Host = 'smtp.office365.com';
+    $mail->SMTPAuth = true;
+    $mail->Username = 'tickets@bacrocorp.com';
+    $mail->Password = 'XTqzA0GkA#';
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Port = 587;
+    $mail->CharSet = 'UTF-8';
     
     $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
     $mail->addAddress($email, $name);
@@ -2234,7 +2241,14 @@ function sendAdminNotificationEmail($name, $email, $priority, $department, $subj
   try {
     $mail = new PHPMailer(true);
     
-    configurarSMTP($mail);
+    $mail->isSMTP();
+    $mail->Host = 'smtp.office365.com';
+    $mail->SMTPAuth = true;
+    $mail->Username = 'tickets@bacrocorp.com';
+    $mail->Password = 'XTqzA0GkA#';
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Port = 587;
+    $mail->CharSet = 'UTF-8';
     
     $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
     $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
@@ -2256,7 +2270,14 @@ function sendResponsableNotificationEmail($name, $email, $priority, $department,
   try {
     $mail = new PHPMailer(true);
     
-    configurarSMTP($mail);
+    $mail->isSMTP();
+    $mail->Host = 'smtp.office365.com';
+    $mail->SMTPAuth = true;
+    $mail->Username = 'tickets@bacrocorp.com';
+    $mail->Password = 'XTqzA0GkA#';
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Port = 587;
+    $mail->CharSet = 'UTF-8';
     
     $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
     

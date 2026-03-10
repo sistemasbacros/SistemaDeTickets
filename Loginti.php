@@ -7,36 +7,15 @@ ob_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// ─── SISTEMA DE LOGGING PARA DEPURACIÓN ───────────────────────────────────────
-define('LOG_FILE', __DIR__ . '/logs/login_debug.log');
-define('LOG_ENABLED', true);
-
-function writeLog($message, $level = 'INFO') {
-    if (!LOG_ENABLED) return;
-    $logDir = dirname(LOG_FILE);
-    if (!is_dir($logDir)) {
-        @mkdir($logDir, 0755, true);
-    }
-    $timestamp = date('Y-m-d H:i:s');
-    $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
-    $sessionId = session_id() ?: 'NO_SESSION';
-    $logEntry = sprintf("[%s] [%s] [IP: %s] [SID: %s] %s\n", $timestamp, str_pad($level, 7), $ip, substr($sessionId, 0, 10) . '...', $message);
-    @file_put_contents(LOG_FILE, $logEntry, FILE_APPEND | LOCK_EX);
-}
-
-writeLog("========== INICIO DE PETICIÓN ==========", 'INFO');
-writeLog("Método: " . $_SERVER['REQUEST_METHOD'], 'INFO');
-
 // CONFIGURACIÓN DE SESIÓN SEGURA ANTES DE session_start()
 ini_set('session.cookie_httponly', 1);
-ini_set('session.cookie_secure', 0);
+ini_set('session.cookie_secure', 0); // Cambiar a 1 si usas HTTPS
 ini_set('session.use_strict_mode', 1);
 ini_set('session.cookie_samesite', 'Strict');
 ini_set('session.use_only_cookies', 1);
 
 // INICIAR SESIÓN CON CONFIGURACIÓN SEGURA
 session_start();
-writeLog("Sesión iniciada. Session ID: " . session_id(), 'INFO');
 
 // HEADERS PARA PREVENIR CACHE
 header("Cache-Control: no-cache, no-store, must-revalidate, max-age=0");
@@ -104,16 +83,11 @@ if (isset($_GET['error']) && $_GET['error'] === 'session_expired') {
 // Procesar login si se envió el formulario
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($_POST['contrasena'])) {
     
-    writeLog("========== INTENTO DE LOGIN ==========", 'INFO');
-    writeLog("Usuario: " . $_POST['usuario'], 'INFO');
-    
     // VERIFICAR TOKEN CSRF
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         $loginError = 'Error de seguridad. Por favor, recarga la página e intenta nuevamente.';
         $debugInfo[] = "❌ Error CSRF: Token inválido";
-        writeLog("❌ Error CSRF", 'ERROR');
     } else {
-        writeLog("✅ Token CSRF válido", 'INFO');
         $usuario = trim($_POST['usuario']);
         $contrasena = trim($_POST['contrasena']);
         
@@ -123,7 +97,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
         if (empty($usuario) || empty($contrasena)) {
             $loginError = 'Usuario y contraseña son requeridos';
             $debugInfo[] = "❌ Error: Campos vacíos";
-            writeLog("❌ Campos vacíos", 'ERROR');
         } else {
             // Configuración de conexión a la base de datos usando config.php
             require_once __DIR__ . '/config.php';
@@ -158,17 +131,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
             );
             
             $debugInfo[] = "🔌 Intentando conectar a: " . $serverName;
-            $debugInfo[] = "🔌 Base de datos: " . $dbName;
-            $debugInfo[] = "🔌 Usuario BD: " . $dbUser;
-            $debugInfo[] = "🔐 TrustServerCertificate: habilitado";
-            writeLog("🔌 Conectando a BD - Host: $serverName, DB: $dbName, User: $dbUser", 'INFO');
+            $debugInfo[] = "🔌 Base de datos: Comedor";
             
             // Establecer conexión
             $conn = sqlsrv_connect($serverName, $connectionOptions);
             
             if ($conn) {
                 $debugInfo[] = "✅ Conexión exitosa a SQL Server";
-                writeLog("✅ Conexión exitosa a SQL Server", 'INFO');
                 
                 // Consulta para verificar las credenciales
                 $sql = "SELECT Id_Empleado, Nombre, Area, Usuario 
@@ -176,24 +145,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                         WHERE Usuario = ? AND Contrasena = ?";
                 $params = array($usuario, $contrasena);
                 
-                $debugInfo[] = "📝 Ejecutando consulta SQL";
-                writeLog("📝 Ejecutando consulta para usuario: $usuario", 'INFO');
+                $debugInfo[] = "📝 Ejecutando consulta: " . $sql;
+                $debugInfo[] = "📝 Parámetros: Usuario=" . $usuario . ", Contraseña=" . $contrasena;
                 
                 $stmt = sqlsrv_query($conn, $sql, $params);
                 
                 if ($stmt) {
                     $debugInfo[] = "✅ Consulta ejecutada correctamente";
-                    writeLog("✅ Consulta ejecutada", 'INFO');
                     
                     if (sqlsrv_has_rows($stmt)) {
                         $debugInfo[] = "✅ Usuario encontrado en la base de datos";
-                        writeLog("✅ Usuario encontrado: $usuario", 'INFO');
                         
                         $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
                         
                         // LIMPIAR SESIÓN EXISTENTE COMPLETAMENTE
                         session_regenerate_id(true);
-                        writeLog("🔄 Session ID regenerado", 'INFO');
                         
                         // Configurar sesión con múltiples factores de seguridad
                         $_SESSION = array(); // Limpiar todo primero
@@ -204,43 +170,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                         $_SESSION['logged_in'] = true;
                         $_SESSION['LOGIN_TIME'] = time();
                         $_SESSION['LAST_ACTIVITY'] = time();
-                        $_SESSION['last_activity'] = time();
-                        $_SESSION['authenticated_from_login'] = true;
-                        $_SESSION['session_token'] = bin2hex(random_bytes(32));
+                        $_SESSION['last_activity'] = time(); // Para verificación de acceso directo
+                        $_SESSION['authenticated_from_login'] = true; // BANDERA CRÍTICA
+                        $_SESSION['session_token'] = bin2hex(random_bytes(32)); // Token único de sesión
                         $_SESSION['ip_address'] = $_SERVER['REMOTE_ADDR'];
                         $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'];
                         $_SESSION['initiated'] = true;
                         $_SESSION['last_regeneration'] = time();
-                        $_SESSION['login_source'] = 'form_login';
-                        $_SESSION['origin_token'] = bin2hex(random_bytes(16));
-                        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+                        $_SESSION['login_source'] = 'form_login'; // VERIFICACIÓN CRÍTICA PARA ACCESO DIRECTO
+                        $_SESSION['origin_token'] = bin2hex(random_bytes(16)); // Token de origen único
                         
-                        writeLog("✅✅✅ LOGIN EXITOSO para: " . $row['Nombre'], 'INFO');
-                        writeLog("🔄 Redirigiendo a IniSoport.php...", 'INFO');
+                        $debugInfo[] = "✅ Sesión configurada para: " . $row['Nombre'];
+                        $debugInfo[] = "✅ Bandera authenticated_from_login establecida";
+                        $debugInfo[] = "✅ Token de sesión generado";
+                        $debugInfo[] = "✅ IP address almacenada: " . $_SERVER['REMOTE_ADDR'];
+                        $debugInfo[] = "✅ Login source establecido: form_login";
+                        $debugInfo[] = "✅ Token de origen generado";
+                        $debugInfo[] = "🔄 Redirigiendo a IniSoport.php...";
                         
                         // Cerrar conexión
                         sqlsrv_free_stmt($stmt);
                         sqlsrv_close($conn);
                         
-                        // REDIRIGIR A INISOPORT.PHP - IMPORTANTE: exit() después
-                        ob_end_clean();
+                        // REDIRIGIR A INISOPORT.PHP
                         header("Location: IniSoport.php");
-                        exit(); // MUY IMPORTANTE: Detener ejecución aquí
+                        ob_end_flush();
+                        exit();
                         
                     } else {
                         $loginError = 'Usuario o contraseña incorrectos';
                         $debugInfo[] = "❌ No se encontró usuario con esas credenciales";
-                        writeLog("❌ Usuario NO encontrado: $usuario", 'WARNING');
                     }
                 } else {
                     $loginError = 'Error en la consulta a la base de datos';
                     $debugInfo[] = "❌ Error en la consulta SQL";
-                    writeLog("❌ Error en consulta SQL", 'ERROR');
                     $errors = sqlsrv_errors();
                     if ($errors) {
                         foreach($errors as $error) {
                             $debugInfo[] = "SQL Error: " . $error['message'];
-                            writeLog("SQL Error: " . $error['message'], 'ERROR');
+                            $debugInfo[] = "SQL State: " . $error['SQLSTATE'];
+                            $debugInfo[] = "Code: " . $error['code'];
                         }
                     }
                 }
@@ -251,32 +220,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
             } else {
                 $loginError = 'Error de conexión a la base de datos';
                 $debugInfo[] = "❌ No se pudo conectar a SQL Server";
-                writeLog("❌ Error de conexión a SQL Server", 'ERROR');
                 $errors = sqlsrv_errors();
                 if ($errors) {
                     foreach($errors as $error) {
                         $debugInfo[] = "Connection Error: " . $error['message'];
-                        writeLog("Connection Error: " . $error['message'], 'ERROR');
+                        $debugInfo[] = "Connection State: " . $error['SQLSTATE'];
+                        $debugInfo[] = "Code: " . $error['code'];
                     }
                 } else {
                     $debugInfo[] = "No hay información específica del error de conexión";
-                    writeLog("Sin información de error de conexión", 'ERROR');
                 }
             }
         }
     }
 }
 
-// SI LLEGAMOS AQUÍ, MOSTRAMOS EL HTML DEL LOGIN
-// Solo limpiar sesión si NO hubo login exitoso
-writeLog("📄 Mostrando formulario de login", 'INFO');
-
-// Limpiar cualquier sesión residual (solo si no hay login válido)
-if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    session_unset();
-    session_destroy();
-    session_start();
-}
+// SI LLEGAMOS AQUÍ, ENTONCES MOSTRAMOS EL HTML DEL LOGIN
+// Limpiar cualquier sesión residual
+session_unset();
+session_destroy();
+session_start(); // Reiniciar sesión limpia
 
 // Regenerar CSRF token para el nuevo formulario
 $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -1298,23 +1261,53 @@ ob_end_flush();
             }
         }, 3000);
         
-        // Manejar el envío del formulario
+        // ===== VERSIÓN CORREGIDA - FUNCIONA CON ENTER Y CLIC =====
         document.getElementById('loginForm').addEventListener('submit', function(e) {
-            const usuario = document.getElementById('usuario').value;
-            const contrasena = document.getElementById('contrasena').value;
+            const usuario = document.getElementById('usuario').value.trim();
+            const contrasena = document.getElementById('contrasena').value.trim();
             const loginButton = document.getElementById('loginButton');
             
-            if (usuario && contrasena) {
-                // Mostrar estado de carga
-                loginButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando credenciales...';
-                loginButton.disabled = true;
-                
-                // Agregar pequeña demora para mostrar la animación
-                setTimeout(function() {
-                    loginButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando sesión segura...';
-                }, 1000);
+            // Validar campos vacíos
+            if (!usuario || !contrasena) {
+                e.preventDefault();
+                mostrarError('Por favor complete todos los campos');
+                return;
             }
+            
+            // Cambiar estado del botón - UNA SOLA VEZ
+            loginButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando credenciales...';
+            loginButton.disabled = true;
+            
+            // IMPORTANTE: No usar setTimeout aquí
+            // El formulario se envía naturalmente después de este evento
         });
+
+        // Función para mostrar errores
+        function mostrarError(texto) {
+            // Eliminar mensajes de error existentes
+            const erroresPrevios = document.querySelectorAll('.error-message');
+            erroresPrevios.forEach(el => el.remove());
+            
+            // Crear nuevo mensaje
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + texto;
+            
+            // Insertar en el lugar correcto
+            const securityNotice = document.querySelector('.security-notice');
+            if (securityNotice) {
+                securityNotice.insertAdjacentElement('afterend', errorDiv);
+            } else {
+                document.querySelector('form').insertBefore(errorDiv, document.querySelector('form').firstChild);
+            }
+            
+            // Auto-ocultar después de 4 segundos
+            setTimeout(() => {
+                if (errorDiv && errorDiv.parentNode) {
+                    errorDiv.remove();
+                }
+            }, 4000);
+        }
 
         // Prevenir que el navegador cachee la página
         window.addEventListener('pageshow', function(event) {
@@ -1353,7 +1346,7 @@ ob_end_flush();
             if (e.key === 'Enter') {
                 const focused = document.activeElement;
                 if (focused && (focused.id === 'usuario' || focused.id === 'contrasena')) {
-                    document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+                    document.getElementById('loginForm').requestSubmit();
                 }
             }
         });
@@ -1379,10 +1372,13 @@ ob_end_flush();
             document.documentElement.style.setProperty('--vh', `${vh}px`);
             
             // Si la pantalla es muy pequeña, ocultar elementos no esenciales
-            if (window.innerHeight < 600) {
-                document.querySelector('.footer-text').style.display = 'none';
-            } else {
-                document.querySelector('.footer-text').style.display = 'flex';
+            const footerText = document.querySelector('.footer-text');
+            if (footerText) {
+                if (window.innerHeight < 600) {
+                    footerText.style.display = 'none';
+                } else {
+                    footerText.style.display = 'flex';
+                }
             }
         }
 

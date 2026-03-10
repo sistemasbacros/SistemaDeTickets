@@ -2,14 +2,30 @@
 /**
  * config.php — Configuración central de credenciales y parámetros del sistema.
  *
- * Todas las credenciales se leen desde variables de entorno inyectadas por Docker Compose.
+ * Todas las credenciales se leen desde variables de entorno inyectadas por Docker Compose
+ * o desde el archivo .env en entornos locales sin Docker.
  * Nunca hardcodear valores en este archivo; usar el archivo .env en el servidor.
  */
 
+// ─── Carga de .env para entornos locales (sin Docker) ────────────────────────
+if (!getenv('DB_HOST')) {
+    $envFile = __DIR__ . '/.env';
+    if (file_exists($envFile)) {
+        foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            if (strpos(trim($line), '#') === 0) continue;
+            if (strpos($line, '=') !== false) {
+                [$key, $value] = explode('=', $line, 2);
+                putenv(trim($key) . '=' . trim($value));
+            }
+        }
+    }
+}
+
 // ─── Base de datos: Ticket (módulo TI / Servicios Generales) ─────────────────
 $DB_HOST     = getenv('DB_HOST');
-$DB_PORT     = getenv('DB_PORT')     ?: '1433';
-$DB_SERVER   = $DB_HOST . ',' . $DB_PORT; // formato requerido por sqlsrv_connect
+$DB_PORT     = getenv('DB_PORT');
+// Para instancias nombradas (ej: SERVIDOR\SQLEXPRESS) no se usa puerto
+$DB_SERVER   = $DB_PORT ? $DB_HOST . ',' . $DB_PORT : $DB_HOST;
 $DB_DATABASE = getenv('DB_DATABASE');
 $DB_USERNAME = getenv('DB_USERNAME');
 $DB_PASSWORD = getenv('DB_PASSWORD');
@@ -42,6 +58,10 @@ if (!defined('ADMIN_EMAIL')) {
 if (!defined('ADMIN_NAME')) {
     define('ADMIN_NAME', getenv('ADMIN_NAME') ?: 'Administrador TI BacroCorp');
 }
+
+// ─── Snipe-IT (inventario TI) ────────────────────────────────────────────────
+$SNIPE_IT_URL   = rtrim(getenv('SNIPE_IT_URL') ?: '', '/');
+$SNIPE_IT_TOKEN = getenv('SNIPE_IT_TEST');
 
 /**
  * Configura el transporte SMTP en una instancia de PHPMailer.
