@@ -60,11 +60,21 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &&
     }
 }
 
+// Destino tras login: parámetro GET "redirect" validado (solo .php del mismo proyecto)
+function getRedirectTarget(string $default = 'IniSoport.php'): string {
+    $raw = $_GET['redirect'] ?? $_POST['redirect'] ?? '';
+    // Solo permite nombres de archivo .php sin rutas ni protocolos
+    if ($raw && preg_match('/^[A-Za-z0-9_\-]+\.php$/', $raw)) {
+        return $raw;
+    }
+    return $default;
+}
+
 // SOLO REDIRIGIR SI VIENE DEL FORMULARIO DE LOGIN O SI LA SESIÓN ES VÁLIDA
 if ($shouldRedirectToDashboard) {
     // Solo redirigir si no es un acceso directo reciente
     if (!isset($_SESSION['last_direct_access']) || (time() - $_SESSION['last_direct_access'] > 10)) {
-        header("Location: IniSoport.php");
+        header("Location: " . getRedirectTarget());
         ob_end_flush();
         exit();
     }
@@ -186,14 +196,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                         $debugInfo[] = "✅ IP address almacenada: " . $_SERVER['REMOTE_ADDR'];
                         $debugInfo[] = "✅ Login source establecido: form_login";
                         $debugInfo[] = "✅ Token de origen generado";
-                        $debugInfo[] = "🔄 Redirigiendo a IniSoport.php...";
-                        
+                        $redirectTarget = getRedirectTarget();
+                        $debugInfo[] = "🔄 Redirigiendo a " . $redirectTarget . "...";
+
                         // Cerrar conexión
                         sqlsrv_free_stmt($stmt);
                         sqlsrv_close($conn);
-                        
-                        // REDIRIGIR A INISOPORT.PHP
-                        header("Location: IniSoport.php");
+
+                        header("Location: " . $redirectTarget);
                         ob_end_flush();
                         exit();
                         
