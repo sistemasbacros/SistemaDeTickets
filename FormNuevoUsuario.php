@@ -39,27 +39,33 @@ function snipeUploadAvatar(int $userId, string $filePath): array
 {
     [$snipeUrl, $snipeToken] = getSnipeVars();
     if (!$snipeUrl || !$snipeToken) return ['error' => 'Snipe-IT no configurado.'];
+    if (!file_exists($filePath))    return ['error' => 'Archivo de avatar no encontrado.'];
+
+    $mime = mime_content_type($filePath) ?: 'image/jpeg';
 
     $ch = curl_init($snipeUrl . '/api/v1/users/' . $userId);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 20,
-        CURLOPT_CUSTOMREQUEST  => 'POST',           // Snipe-IT acepta POST con _method=PATCH
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_CUSTOMREQUEST  => 'PATCH',
         CURLOPT_HTTPHEADER     => [
             'Authorization: Bearer ' . $snipeToken,
             'Accept: application/json',
-            // Sin Content-Type: cURL lo pone automáticamente para multipart
+            // Sin Content-Type manual: cURL lo genera automático con boundary para multipart
         ],
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_POSTFIELDS     => [
-            '_method' => 'PATCH',
-            'avatar'  => new CURLFile($filePath),
+            'avatar' => new CURLFile($filePath, $mime, basename($filePath)),
         ],
     ]);
     $resp = curl_exec($ch);
     $err  = curl_error($ch);
+    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($err) return ['error' => 'cURL avatar: ' . $err];
+
+    if ($err)       return ['error' => 'cURL avatar: ' . $err];
+    if ($http >= 400) return ['error' => 'Snipe-IT avatar HTTP ' . $http . ': ' . $resp];
+
     $decoded = json_decode($resp, true);
     return is_array($decoded) ? $decoded : ['error' => 'Respuesta inválida al subir avatar.'];
 }
@@ -214,9 +220,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $equiposPdf = [];
     foreach ($assetIds as $i => $aid) {
         $eq = [
-            'tipo'            => strtoupper($assetTipos[$i]   ?? ''),
+            'tipo'            => mb_strtoupper($assetTipos[$i]   ?? '', 'UTF-8'),
             'caracteristicas' => ($assetCaracts[$i] ?? '') !== '' ? $assetCaracts[$i] : null,
-            'marca'           => strtoupper($assetMarcas[$i]  ?? ''),
+            'marca'           => mb_strtoupper($assetMarcas[$i]  ?? '', 'UTF-8'),
             'modelo'          => ($assetModelos[$i] ?? '') !== '' ? $assetModelos[$i] : null,
             'no_serie'        => ($assetSerials[$i] ?? '') !== '' ? $assetSerials[$i] : null,
         ];
@@ -226,27 +232,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $rawDate  = $f('checkout_date_global') ?: date('Y-m-d');
     $fechaRec = date('d/m/Y', strtotime($rawDate));
 
+    $u8 = fn(string $s): string => mb_strtoupper($s, 'UTF-8');
     $pdfPayload = json_encode([
-        'nombre'           => strtoupper($f('first_name')),
-        'apellido_paterno' => strtoupper($f('apellido_paterno')),
-        'apellido_materno' => strtoupper($f('apellido_materno')) ?: null,
-        'calle'            => strtoupper($f('calle')),
+        'nombre'           => $u8($f('first_name')),
+        'apellido_paterno' => $u8($f('apellido_paterno')),
+        'apellido_materno' => $u8($f('apellido_materno')) ?: null,
+        'calle'            => $u8($f('calle')),
         'numero'           => $f('numero') ?: null,
-        'colonia'          => strtoupper($f('colonia')) ?: null,
+        'colonia'          => $u8($f('colonia')) ?: null,
         'cp'               => $f('zip') ?: null,
-        'municipio_estado' => strtoupper($f('municipio_estado')),
+        'municipio_estado' => $u8($f('municipio_estado')),
         'celular'          => $f('mobile') ?: null,
         'tel_particular'   => $f('phone') ?: null,
-        'cargo'            => strtoupper($f('jobtitle')),
-        'area'             => strtoupper($f('department_name')),
-        'jefe_inmediato'   => strtoupper($f('manager_name')),
+        'cargo'            => $u8($f('jobtitle')),
+        'area'             => $u8($f('department_name')),
+        'jefe_inmediato'   => $u8($f('manager_name')),
         'num_empleado'     => $f('employee_num'),
         'correo'           => $f('email'),
         'tipo'             => $f('tipo_contratacion') ?: 'PERMANENTE',
         'folio'            => $f('folio') ?: null,
         'fecha_recepcion'  => $fechaRec,
         'equipos'          => $equiposPdf,
-    ], JSON_UNESCAPED_UNICODE);
+    ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
     // Leer PDF_API_URL del entorno (con fallback directo al .env igual que getSnipeVars)
     $pdfApiUrl = getenv('PDF_API_URL') ?: '';
@@ -280,7 +287,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdfWarn = 'PDF no generado: ' . $pdfErr;
     }
 
+    // ── Checkout de licencias ─────────────────────────────────────────────────
+    $licenseIds     = $_POST['license_ids'] ?? [];
+    $licenseResults = [];
+
+    if ($newUserId && !empty($licenseIds)) {
+        foreach ($licenseIds as $licenseId) {
+            $lResp = snipeRequest('/licenses/' . intval($licenseId) . '/checkout', 'POST', [
+                'checkout_to_type' => 'user',
+                'assigned_to'      => $newUserId,
+            ]);
+            $licenseResults[] = [
+                'license_id' => $licenseId,
+                'ok'         => ($lResp['status'] ?? '') === 'success',
+                'msg'        => $lResp['messages'] ?? ($lResp['error'] ?? ''),
+            ];
+        }
+    }
+
     $failedCo = array_filter($checkoutResults, fn($r) => !$r['ok']);
+    $failedLic = array_filter($licenseResults, fn($r) => !$r['ok']);
 
     echo json_encode(array_filter([
         'success'          => true,
@@ -288,17 +314,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'checkout_results' => $checkoutResults,
         'pdf_url'          => $pdfUrl,
         'message'          => 'Usuario creado' . ($newUserId ? " (ID: $newUserId)" : '') .
-                              '. Assets asignados: ' . (count($checkoutResults) - count($failedCo)) .
-                              '/' . count($checkoutResults) . '.',
-        'warning'          => $pdfWarn ?? (!empty($failedCo)
-            ? 'Algunos assets no se pudieron asignar: ' . implode(', ', array_column($failedCo, 'asset_id'))
-            : null),
+                              '. Activos: ' . (count($checkoutResults) - count($failedCo)) . '/' . count($checkoutResults) .
+                              '. Licencias: ' . (count($licenseResults) - count($failedLic)) . '/' . count($licenseResults) . '.',
+        'warning'          => $pdfWarn ?? (
+            !empty($failedCo)  ? 'Activos sin asignar: '  . implode(', ', array_column($failedCo,  'asset_id'))   :
+            (!empty($failedLic) ? 'Licencias sin asignar: ' . implode(', ', array_column($failedLic, 'license_id')) : null)
+        ),
     ], fn($v) => $v !== null));
     exit;
 }
 
 // ── Helper: leer parámetro GET y escaparlo (pre-relleno por URL) ─────────────
-// Acepta alias alternativos para compatibilidad con parámetros anteriores.
 function gp(string $key, string $default = '', string ...$aliases): string
 {
     $val = $_GET[$key] ?? null;
@@ -307,7 +333,28 @@ function gp(string $key, string $default = '', string ...$aliases): string
             if (isset($_GET[$a])) { $val = $_GET[$a]; break; }
         }
     }
-    return htmlspecialchars($val ?? $default, ENT_QUOTES, 'UTF-8');
+    $str = $val ?? $default;
+    if (!mb_check_encoding($str, 'UTF-8')) {
+        $str = mb_convert_encoding($str, 'UTF-8', 'ISO-8859-1');
+    }
+    return htmlspecialchars($str, ENT_QUOTES, 'UTF-8');
+}
+
+// ── Helper: igual que gp() pero aplica Title Case (primera letra mayúscula) ──
+function tc(string $key, string $default = '', string ...$aliases): string
+{
+    $val = $_GET[$key] ?? null;
+    if ($val === null) {
+        foreach ($aliases as $a) {
+            if (isset($_GET[$a])) { $val = $_GET[$a]; break; }
+        }
+    }
+    $str = $val ?? $default;
+    if (!mb_check_encoding($str, 'UTF-8')) {
+        $str = mb_convert_encoding($str, 'UTF-8', 'ISO-8859-1');
+    }
+    $str = mb_convert_case($str, MB_CASE_TITLE, 'UTF-8');
+    return htmlspecialchars($str, ENT_QUOTES, 'UTF-8');
 }
 
 // ── Cargar datos desde Snipe-IT para el formulario ────────────────────────────
@@ -320,6 +367,26 @@ function snipeList(string $endpoint): array
 $companies   = snipeList('/companies');
 $departments = snipeList('/departments');
 $locations   = snipeList('/locations');
+// Solo usuarios activos pueden ser jefes/supervisores (Snipe-IT no tiene flag "is_manager")
+$managersResp = snipeRequest('/users?limit=500&sort=last_name&order=asc&activated=1');
+$managers     = $managersResp['rows'] ?? [];
+
+// Licencias
+$licencias = [];
+$licResp   = snipeRequest('/licenses?limit=500&sort=name&order=asc');
+foreach ($licResp['rows'] ?? [] as $lic) {
+    $libres = ($lic['seats'] ?? 0) - ($lic['seats_used'] ?? 0);
+    $licencias[] = [
+        'id'          => $lic['id'],
+        'name'        => $lic['name'] ?? '',
+        'product_key' => $lic['serial'] ?? '',
+        'fabricante'  => $lic['manufacturer']['name'] ?? '',
+        'categoria'   => $lic['category']['name'] ?? '',
+        'total'       => $lic['seats'] ?? 0,
+        'libres'      => $libres,
+        'libre'       => $libres > 0,
+    ];
+}
 
 $snipeError = null;
 $bienes     = [];
@@ -459,17 +526,17 @@ if (isset($hwResp['error'])) {
             <div class="col-md-3">
                 <label class="form-label">Nombre(s)<span class="req">*</span></label>
                 <input type="text" class="form-control" name="first_name"
-                       placeholder="Nombre(s)" value="<?= gp('nombre') ?>" required />
+                       placeholder="Nombre(s)" value="<?= tc('nombre') ?>" required />
             </div>
             <div class="col-md-3">
                 <label class="form-label">Apellido Paterno<span class="req">*</span></label>
                 <input type="text" class="form-control" name="apellido_paterno"
-                       placeholder="Paterno" value="<?= gp('apellido_paterno') ?>" required />
+                       placeholder="Paterno" value="<?= tc('apellido_paterno') ?>" required />
             </div>
             <div class="col-md-3">
                 <label class="form-label">Apellido Materno</label>
                 <input type="text" class="form-control" name="apellido_materno"
-                       placeholder="Materno" value="<?= gp('apellido_materno', '', 'apellido_mat') ?>" />
+                       placeholder="Materno" value="<?= tc('apellido_materno', '', 'apellido_mat') ?>" />
             </div>
             <div class="col-md-3">
                 <label class="form-label">Usuario<span class="req">*</span></label>
@@ -557,7 +624,7 @@ if (isset($hwResp['error'])) {
                         <?php foreach ($companies as $c): ?>
                             <option value="<?= $c['id'] ?>"
                                 <?= gp('empresa_id') == $c['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($c['name']) ?>
+                                <?= htmlspecialchars($c['name'], ENT_QUOTES, 'UTF-8') ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -568,9 +635,9 @@ if (isset($hwResp['error'])) {
                         <option value="">— Sin departamento —</option>
                         <?php foreach ($departments as $d): ?>
                             <option value="<?= $d['id'] ?>"
-                                    data-name="<?= htmlspecialchars($d['name']) ?>"
+                                    data-name="<?= htmlspecialchars($d['name'], ENT_QUOTES, 'UTF-8') ?>"
                                 <?= gp('depto_id') == $d['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($d['name']) ?>
+                                <?= htmlspecialchars($d['name'], ENT_QUOTES, 'UTF-8') ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -583,7 +650,7 @@ if (isset($hwResp['error'])) {
                         <?php foreach ($locations as $l): ?>
                             <option value="<?= $l['id'] ?>"
                                 <?= gp('ubicacion_id') == $l['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($l['name']) ?>
+                                <?= htmlspecialchars($l['name'], ENT_QUOTES, 'UTF-8') ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -597,13 +664,23 @@ if (isset($hwResp['error'])) {
                 <div class="col-md-3">
                     <label class="form-label">Cargo / Puesto</label>
                     <input type="text" class="form-control" name="jobtitle"
-                           placeholder="Ej. Analista de TI" value="<?= gp('cargo') ?>" />
+                           placeholder="Ej. Analista de TI" value="<?= tc('cargo') ?>" />
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Jefe Inmediato</label>
-                    <input type="text" class="form-control" name="manager_name" id="managerName"
-                           placeholder="Nombre completo del jefe" value="<?= gp('jefe_inmediato') ?>" />
-                    <input type="hidden" name="manager_id" />
+                    <label class="form-label">Jefe Inmediato / Supervisor</label>
+                    <select class="form-select" name="manager_id" id="selManager"
+                            onchange="document.getElementById('managerNameHidden').value = this.options[this.selectedIndex].dataset.name || '';">
+                        <option value="">— Sin supervisor —</option>
+                        <?php foreach ($managers as $mgr): ?>
+                            <option value="<?= $mgr['id'] ?>"
+                                    data-name="<?= htmlspecialchars($mgr['name'], ENT_QUOTES, 'UTF-8') ?>"
+                                    <?= gp('manager_id') == $mgr['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($mgr['name'], ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <input type="hidden" name="manager_name" id="managerNameHidden"
+                           value="<?= tc('jefe_inmediato') ?>" />
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Tipo de Contratación</label>
@@ -620,10 +697,11 @@ if (isset($hwResp['error'])) {
                 <div class="col-md-3">
                     <label class="form-label">Idioma</label>
                     <select class="form-select" name="locale">
-                        <option value="">— Predeterminado —</option>
-                        <option value="es-ES" <?= gp('idioma') === 'es-ES' ? 'selected' : '' ?>>Español</option>
-                        <option value="en-US" <?= gp('idioma') === 'en-US' ? 'selected' : '' ?>>English</option>
-                        <option value="fr"    <?= gp('idioma') === 'fr'    ? 'selected' : '' ?>>Français</option>
+                        <?php $idiomaVal = gp('idioma', 'es-MX'); ?>
+                        <option value="es-MX" <?= $idiomaVal === 'es-MX' ? 'selected' : '' ?>>Español (México)</option>
+                        <option value="es"    <?= $idiomaVal === 'es'    ? 'selected' : '' ?>>Español</option>
+                        <option value="en-US" <?= $idiomaVal === 'en-US' ? 'selected' : '' ?>>English (US)</option>
+                        <option value="fr"    <?= $idiomaVal === 'fr'    ? 'selected' : '' ?>>Français</option>
                     </select>
                 </div>
 
@@ -651,7 +729,7 @@ if (isset($hwResp['error'])) {
                 <div class="col-md-5">
                     <label class="form-label">Calle</label>
                     <input type="text" class="form-control" name="calle"
-                           placeholder="Ej. Av. Reforma" value="<?= gp('calle', '', 'direccion') ?>" />
+                           placeholder="Ej. Av. Reforma" value="<?= tc('calle', '', 'direccion') ?>" />
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Número</label>
@@ -661,7 +739,7 @@ if (isset($hwResp['error'])) {
                 <div class="col-md-3">
                     <label class="form-label">Colonia</label>
                     <input type="text" class="form-control" name="colonia"
-                           placeholder="Centro" value="<?= gp('colonia', '', 'col') ?>" />
+                           placeholder="Centro" value="<?= tc('colonia', '', 'col') ?>" />
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Código Postal</label>
@@ -674,6 +752,7 @@ if (isset($hwResp['error'])) {
                         $mun = $_GET['municipio_estado']
                             ?? (isset($_GET['ciudad']) ? trim(($_GET['ciudad'] ?? '') . ' ' . ($_GET['estado'] ?? '')) : null)
                             ?? '';
+                        $mun = mb_convert_case($mun, MB_CASE_TITLE, 'UTF-8');
                         $mun = htmlspecialchars($mun, ENT_QUOTES, 'UTF-8');
                     ?>
                     <input type="text" class="form-control" name="municipio_estado"
@@ -850,6 +929,73 @@ if (isset($hwResp['error'])) {
         <?php endif; ?>
     </div>
 
+    <!-- ══ 4. LICENCIAS A ASIGNAR ════════════════════════════════════════════ -->
+    <div class="form-section">
+        <div class="section-title">
+            <i class="fas fa-key"></i> Licencias a Asignar
+            <span style="margin-left:auto;font-size:.78rem;font-weight:400;color:#5f6c80;">
+                <i class="fas fa-circle" style="color:#0b6b3f;font-size:.45rem"></i> Disponible &nbsp;
+                <i class="fas fa-circle" style="color:#b85e00;font-size:.45rem"></i> Sin asientos
+            </span>
+        </div>
+
+        <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+            <div class="selected-counter" id="licCounterBadge" style="display:none!important">
+                <i class="fas fa-check-circle"></i>
+                <span id="licCounterNum">0</span> licencia(s) seleccionada(s)
+            </div>
+            <input type="text" id="buscadorLic" class="form-control"
+                   style="max-width:300px;" placeholder="Buscar por nombre, fabricante..." />
+        </div>
+
+        <?php if (!empty($licencias)): ?>
+        <div class="bienes-wrap">
+            <table class="btbl" id="tblLicencias">
+                <thead>
+                    <tr>
+                        <th style="width:40px;text-align:center;">
+                            <input type="checkbox" id="checkAllLic" title="Seleccionar todas"
+                                   style="width:16px;height:16px;accent-color:#fff;cursor:pointer" />
+                        </th>
+                        <th>Nombre de Licencia</th>
+                        <th>Fabricante</th>
+                        <th>Categoría</th>
+                        <th style="text-align:center;">Asientos Libres</th>
+                        <th style="text-align:center;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($licencias as $lic): ?>
+                    <tr class="bien-row lic-row" data-libre="<?= $lic['libre'] ? '1' : '0' ?>">
+                        <td style="text-align:center;">
+                            <input type="checkbox" class="cb-lic"
+                                   name="license_ids[]" value="<?= $lic['id'] ?>"
+                                   <?= !$lic['libre'] ? 'disabled title="Sin asientos disponibles"' : '' ?> />
+                        </td>
+                        <td><strong><?= htmlspecialchars($lic['name']) ?></strong></td>
+                        <td><?= htmlspecialchars($lic['fabricante']) ?></td>
+                        <td><?= htmlspecialchars($lic['categoria']) ?></td>
+                        <td style="text-align:center;">
+                            <?php if ($lic['libre']): ?>
+                                <span class="badge-libre"><i class="fas fa-circle" style="font-size:.35rem;margin-right:4px"></i><?= $lic['libres'] ?></span>
+                            <?php else: ?>
+                                <span class="badge-asignado"><i class="fas fa-circle" style="font-size:.35rem;margin-right:4px"></i>0</span>
+                            <?php endif; ?>
+                        </td>
+                        <td style="text-align:center;color:#5f6c80;"><?= $lic['total'] ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php else: ?>
+            <div style="text-align:center;padding:30px;color:#5f6c80;">
+                <i class="fas fa-key fa-2x" style="margin-bottom:8px;display:block"></i>
+                No se encontraron licencias en Snipe-IT.
+            </div>
+        <?php endif; ?>
+    </div>
+
     <!-- ══ Enviar ══════════════════════════════════════════════════════════════ -->
     <div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;">
         <div id="spinner" style="display:none;">
@@ -944,13 +1090,41 @@ document.getElementById('selDept').addEventListener('change', function(){
     document.getElementById('deptName').value = opt.dataset.name || '';
 });
 
-// ── Buscador en tabla ─────────────────────────────────────────────────────────
+
+// ── Buscador activos ──────────────────────────────────────────────────────────
 document.getElementById('buscador')?.addEventListener('input', function(){
     const q = this.value.toLowerCase();
-    document.querySelectorAll('.bien-row').forEach(r => {
+    document.querySelectorAll('.bien-row:not(.lic-row)').forEach(r => {
         r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
     });
 });
+
+// ── Buscador licencias ────────────────────────────────────────────────────────
+document.getElementById('buscadorLic')?.addEventListener('input', function(){
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('.lic-row').forEach(r => {
+        r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+});
+
+// ── Seleccionar todas las licencias ──────────────────────────────────────────
+document.getElementById('checkAllLic')?.addEventListener('change', function(){
+    document.querySelectorAll('.cb-lic:not(:disabled)').forEach(cb => {
+        cb.checked = this.checked;
+    });
+    updateLicCounter();
+});
+
+document.querySelectorAll('.cb-lic').forEach(cb => {
+    cb.addEventListener('change', updateLicCounter);
+});
+
+function updateLicCounter(){
+    const n = document.querySelectorAll('.cb-lic:checked').length;
+    const badge = document.getElementById('licCounterBadge');
+    document.getElementById('licCounterNum').textContent = n;
+    badge.style.display = n > 0 ? 'inline-flex' : 'none';
+}
 
 // ── Seleccionar todos ─────────────────────────────────────────────────────────
 document.getElementById('checkAll')?.addEventListener('change', async function(){
