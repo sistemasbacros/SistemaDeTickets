@@ -50,10 +50,7 @@
  * @since 2024
  */
 
-////////////////// Backend (PHP) - Conexión y Consulta con Filtros
-// INICIO DE SESIÓN Y VERIFICACIÓN
-<?php
-////////////////// Backend (PHP) - Conexión y Consulta con Filtros
+// Backend (PHP) - Conexión y Consulta con Filtros
 // INICIO DE SESIÓN Y VERIFICACIÓN
 session_start();
 
@@ -115,7 +112,7 @@ $array1 = []; $array2 = []; $array3 = []; $array4 = []; $array5 = []; $array6 = 
 $array8 = []; $array9 = []; $array10 = []; $array11 = []; $array12 = [];
 $array13 = []; $array14 = []; $array15 = []; $array16 = [];
 
-$base_url = BASE_URL . '/';
+$base_url = '';
 
 while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
     array_push($array1, $row['Nombre']);
