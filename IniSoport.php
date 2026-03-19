@@ -2622,13 +2622,13 @@ $iniciales = substr($nombre, 0, 2);
             <a href="#" class="nav-link disabled" data-page="dashboard"><i class="fas fa-home"></i>INICIO</a>
         <?php endif; ?>
         
-        <a href="#" class="nav-link" data-page="levantar-ticket" data-link="<?php echo BASE_URL; ?>/TicketBacros/Formtic1.php"><i class="fas fa-ticket-alt"></i>LEVANTAR TICKET</a>
-        <a href="#" class="nav-link" data-page="revisar-tickets" data-link="<?php echo BASE_URL; ?>/TicketBacros/RevisarT.php"><i class="fas fa-eye"></i>REVISAR TICKETS</a>
+        <a href="#" class="nav-link" data-page="levantar-ticket" data-link="Formtic1.php"><i class="fas fa-ticket-alt"></i>LEVANTAR TICKET</a>
+        <a href="#" class="nav-link" data-page="revisar-tickets" data-link="RevisarT.php"><i class="fas fa-eye"></i>REVISAR TICKETS</a>
 
         <?php if (in_array($usuarioActual, $usuariosPermitidosProcesar)): ?>
-            <a href="#" class="nav-link" data-page="procesar-tickets" data-link="<?php echo BASE_URL; ?>/TicketBacros/TableT1.php"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a>
+            <a href="#" class="nav-link" data-page="procesar-tickets" data-link="TableT1.php"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a>
         <?php else: ?>
-            <a href="#" class="nav-link disabled" data-page="procesar-tickets" data-link="<?php echo BASE_URL; ?>/TicketBacros/TableT1.php"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a>
+            <a href="#" class="nav-link disabled" data-page="procesar-tickets" data-link="TableT1.php"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a>
         <?php endif; ?>
         
         <?php if ($tienePermisosDashboard): ?>
@@ -3898,9 +3898,9 @@ $iniciales = substr($nombre, 0, 2);
             
             const pageConfig = {
                 'dashboard': { showModule: false, title: 'Dashboard de Reportes', mainTitle: 'Bienvenido, <?php echo htmlspecialchars($nombre); ?>', subtitle: 'Dashboard personalizado del sistema de soporte técnico con métricas 3D', permissionRequired: true, allowedUsers: <?php echo json_encode($usuariosPermitidosDashboard); ?> },
-                'levantar-ticket': { showModule: true, url: '<?php echo BASE_URL; ?>/TicketBacros/Formtic1.php', title: 'Levantar Ticket', mainTitle: 'Formulario de Tickets', subtitle: 'Complete el formulario para crear un nuevo ticket de soporte' },
-                'revisar-tickets': { showModule: true, url: '<?php echo BASE_URL; ?>/TicketBacros/RevisarT.php', title: 'Revisar Tickets', mainTitle: 'Revisión de Tickets', subtitle: 'Revise y gestione los tickets asignados' },
-                'procesar-tickets': { showModule: true, url: '<?php echo BASE_URL; ?>/TicketBacros/TableT1.php', title: 'Procesar Tickets', mainTitle: 'Procesamiento de Tickets', subtitle: 'Procese y actualice el estado de los tickets', permissionRequired: true, allowedUsers: <?php echo json_encode($usuariosPermitidosProcesar); ?> },
+                'levantar-ticket': { showModule: true, url: 'Formtic1.php', title: 'Levantar Ticket', mainTitle: 'Formulario de Tickets', subtitle: 'Complete el formulario para crear un nuevo ticket de soporte' },
+                'revisar-tickets': { showModule: true, url: 'RevisarT.php', title: 'Revisar Tickets', mainTitle: 'Revisión de Tickets', subtitle: 'Revise y gestione los tickets asignados' },
+                'procesar-tickets': { showModule: true, url: 'TableT1.php', title: 'Procesar Tickets', mainTitle: 'Procesamiento de Tickets', subtitle: 'Procese y actualice el estado de los tickets', permissionRequired: true, allowedUsers: <?php echo json_encode($usuariosPermitidosProcesar); ?> },
                 'reportes': { showModule: false, title: 'Dashboard de Reportes', mainTitle: 'Reportes de Tickets', subtitle: 'Dashboard con métricas 3D y cumplimiento SLA', permissionRequired: true, allowedUsers: <?php echo json_encode($usuariosPermitidosDashboard); ?> }
             };
             
