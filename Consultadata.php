@@ -95,7 +95,9 @@ $connectionInfo1 = array(
     "Database" => $DB_DATABASE_COMERCIAL,
     "UID"      => $DB_USERNAME_COMERCIAL,
     "PWD"      => $DB_PASSWORD_COMERCIAL,
-    "CharacterSet" => "UTF-8"
+    "CharacterSet" => "UTF-8",
+    "TrustServerCertificate" => true,
+    "Encrypt" => true
 );
 $conn1 = sqlsrv_connect($DB_HOST_COMERCIAL, $connectionInfo1);
 
@@ -128,7 +130,9 @@ $connectionInfo = array(
     "Database" => $DB_DATABASE,
     "UID"      => $DB_USERNAME,
     "PWD"      => $DB_PASSWORD,
-    "CharacterSet" => "UTF-8"
+    "CharacterSet" => "UTF-8",
+    "TrustServerCertificate" => true,
+    "Encrypt" => true
 );
 $conn = sqlsrv_connect($DB_SERVER, $connectionInfo);
 
