@@ -202,10 +202,12 @@ function determinarResponsableFinal($responsable_principal, $subtipo) {
         "Database" => $DB_DATABASE,
         "UID"      => $DB_USERNAME,
         "PWD"      => $DB_PASSWORD,
-        "CharacterSet" => "UTF-8"
+        "CharacterSet" => "UTF-8",
+        "TrustServerCertificate" => true,
+        "Encrypt" => true
     );
     $conn = sqlsrv_connect($DB_SERVER, $connectionInfo);
-    
+
     if ($conn) {
         // Contar tickets en proceso del responsable principal
         $sql = "SELECT COUNT(*) as total FROM T3 WHERE PA = ? AND Estatus = 'En proceso'";
@@ -2136,7 +2138,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     "Database" => $DB_DATABASE,
     "UID"      => $DB_USERNAME,
     "PWD"      => $DB_PASSWORD,
-    "CharacterSet" => "UTF-8"
+    "CharacterSet" => "UTF-8",
+    "TrustServerCertificate" => true,
+    "Encrypt" => true
   );
   $conn = sqlsrv_connect($DB_SERVER, $connectionInfo);
 

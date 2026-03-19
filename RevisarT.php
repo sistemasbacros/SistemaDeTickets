@@ -82,7 +82,7 @@ $apellidos_usuario = extraerApellidos($nombre_usuario);
 $comodines_busqueda = array_unique([$apellidos_usuario, $nombre_usuario]);
 
 require_once __DIR__ . '/config.php';
-$connectionInfo = array("Database" => $DB_DATABASE, "UID" => $DB_USERNAME, "PWD" => $DB_PASSWORD, "CharacterSet" => "UTF-8");
+$connectionInfo = array("Database" => $DB_DATABASE, "UID" => $DB_USERNAME, "PWD" => $DB_PASSWORD, "CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
 $conn = sqlsrv_connect($DB_SERVER, $connectionInfo);
 
 if (!$conn) die("Error de conexión: " . print_r(sqlsrv_errors(), true));
