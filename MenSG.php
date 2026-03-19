@@ -40,6 +40,7 @@
  * @version 1.0
  * @since 2024
  */
+require_once __DIR__ . '/config.php';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -546,7 +547,7 @@
   </div>
 
   <!-- Botón home -->
-  <a href="http://desarollo-bacros/TicketBacros/MenSG.php" id="homeButton" title="Inicio">
+  <a href="<?php echo BASE_URL; ?>/TicketBacros/MenSG.php" id="homeButton" title="Inicio">
     <i class="fas fa-home"></i>
   </a>
 
@@ -605,7 +606,7 @@
         </a>
 
         <!-- Opción 3 -->
-        <a href="http://192.168.100.95/TicketBacros/Login_Procesar.php" class="option-card">
+        <a href="<?php echo BASE_URL; ?>/TicketBacros/Login_Procesar.php" class="option-card">
           <div class="icon-drop">
             <i class="fas fa-cogs"></i>
           </div>

@@ -59,6 +59,21 @@ if (!defined('ADMIN_NAME')) {
     define('ADMIN_NAME', getenv('ADMIN_NAME') ?: 'Administrador TI BacroCorp');
 }
 
+// ─── URLs de la aplicación ───────────────────────────────────────────────────
+if (!defined('BASE_URL')) {
+    $appUrl = getenv('APP_URL');
+    if ($appUrl) {
+        define('BASE_URL', rtrim($appUrl, '/'));
+    } else {
+        $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host  = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        define('BASE_URL', $proto . '://' . $host);
+    }
+}
+if (!defined('COMEDOR_URL')) {
+    define('COMEDOR_URL', rtrim(getenv('COMEDOR_URL') ?: 'http://192.168.100.79', '/'));
+}
+
 // ─── Snipe-IT (inventario TI) ────────────────────────────────────────────────
 $SNIPE_IT_URL   = rtrim(getenv('SNIPE_IT_URL') ?: '', '/');
 $SNIPE_IT_TOKEN = getenv('SNIPE_IT_TEST');

@@ -115,7 +115,7 @@ $array1 = []; $array2 = []; $array3 = []; $array4 = []; $array5 = []; $array6 = 
 $array8 = []; $array9 = []; $array10 = []; $array11 = []; $array12 = [];
 $array13 = []; $array14 = []; $array15 = []; $array16 = [];
 
-$base_url = "http://desarollo-bacros/";
+$base_url = BASE_URL . '/';
 
 while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
     array_push($array1, $row['Nombre']);
