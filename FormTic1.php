@@ -57,8 +57,6 @@
  */
 
 // INICIO DE SESIÓN Y VERIFICACIÓN
-<?php
-// INICIO DE SESIÓN Y VERIFICACIÓN
 session_start();
 
 // Verificar si el usuario está autenticado

@@ -748,7 +748,7 @@ function test_input($data) {
 </head>
 <body>
     <!-- Botón Home -->
-    <a href="<?php echo BASE_URL; ?>/TicketBacros/MenSG.php" id="homeButton" title="Inicio">
+    <a href="MenSG.php" id="homeButton" title="Inicio">
         <i class="fas fa-home"></i>
     </a>
 
