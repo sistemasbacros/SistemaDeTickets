@@ -662,7 +662,7 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
 </head>
 <body>
     <!-- Botón Home -->
-    <a href="http://192.168.100.95/TicketBacros/MenSG.php" id="homeButton" title="Inicio">
+    <a href="<?php echo BASE_URL; ?>/TicketBacros/MenSG.php" id="homeButton" title="Inicio">
         <i class="fas fa-home"></i>
     </a>
 
@@ -794,7 +794,7 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
 
             // Evidencia
             let evidenciaHTML = t.Enlace ? 
-                `<a href="http://192.168.100.95/TicketBacros/${t.Enlace}" target="_blank" class="link-evidencia">
+                `<a href="<?php echo BASE_URL; ?>/TicketBacros/${t.Enlace}" target="_blank" class="link-evidencia">
                     <i class="fas fa-image"></i> Ver
                 </a>` : 
                 '<span style="color: #9aa6b5; font-size: 0.8rem;"><i class="fas fa-times-circle"></i> Sin evidencia</span>';

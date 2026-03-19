@@ -31,9 +31,10 @@
  * @version 1.0
  * @since 2024
  */
+require_once __DIR__ . '/config.php';
 ?>
-  <button class="btn btn-default1" id="Ini" name='Ini' onclick="window.location.href='http://192.168.100.79/Comedor/Licitaciones.php'"> <img src="Inicio.jpg" width="65" /> </button> &nbsp;&nbsp;
-  <button class="btn btn-default115" id="Car" name='Carg' onclick="window.location.href='http://192.168.100.79/Comedor/CargarNuevoContrato.php'"> <img src="Cargcon.png" width="50" /> </button>
+  <button class="btn btn-default1" id="Ini" name='Ini' onclick="window.location.href='<?php echo COMEDOR_URL; ?>/Comedor/Licitaciones.php'"> <img src="Inicio.jpg" width="65" /> </button> &nbsp;&nbsp;
+  <button class="btn btn-default115" id="Car" name='Carg' onclick="window.location.href='<?php echo COMEDOR_URL; ?>/Comedor/CargarNuevoContrato.php'"> <img src="Cargcon.png" width="50" /> </button>
   <button class="btn btn-default115" id="Edit" name='Edit' onclick="theFunction1();"> <img src="Contrato.jpg" width="70" /> </button>
   <button class="btn btn-default" id="Ec" name='Ec' onclick="theFunction();"> <img src="Basurero.jpg" width="50" /> </button> 
   <button class="btn btn-default1" id="EX" name='EX' onclick="ExportToExcel('xlsx')"> <img src="EXCEL.PNG" width="50" /> </button> 
@@ -199,7 +200,7 @@ var dataSet = [];
 
 
 for (var i = 0; i < darray1.length; i++) {
-	dataSet.push([darray1[i],darray2[i],darray3[i],darray4[i],darray5[i],darray6[i],formatter.format(darray7[i]),'<a href="http://192.168.100.79/Comedor/uploads/'+darray3[i]+'/LICITACIONES/">'+darray3[i]+'</a>'])
+	dataSet.push([darray1[i],darray2[i],darray3[i],darray4[i],darray5[i],darray6[i],formatter.format(darray7[i]),'<a href="<?php echo COMEDOR_URL; ?>/Comedor/uploads/'+darray3[i]+'/LICITACIONES/">'+darray3[i]+'</a>'])
 }
 
 
@@ -326,7 +327,7 @@ var arrayJson=JSON.stringify(prueba);
  
 			// Mostramos el texto devuelto por el archivo php
 			// alert(data);
-						window.location.href = 'http://192.168.100.79/Comedor/EditContrato1.php'; //Will take you to Google.
+						window.location.href = '<?php echo COMEDOR_URL; ?>/Comedor/EditContrato1.php';
 	
 			
 		});
@@ -347,7 +348,7 @@ var arrayJson=JSON.stringify(prueba);
  
 			// Mostramos el texto devuelto por el archivo php
 			// alert(data);
-						window.location.href = 'http://192.168.100.79/Comedor/demoupload1.php'; //Will take you to Google.
+						window.location.href = '<?php echo COMEDOR_URL; ?>/Comedor/demoupload1.php';
 	
 			
 		});

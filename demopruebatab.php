@@ -33,6 +33,7 @@
  * @version 0.1 (desarrollo)
  * @since 2024
  */
+require_once __DIR__ . '/config.php';
 ?>
 <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
   <script src="https://cdn.datatables.net/1.10.22/js/jquery.dataTables.js"></script>
@@ -115,11 +116,11 @@ div.scroll {
 
 	
 
-  <button class="btn btn-default1" id="Ini" name='Ini' onclick="window.location.href='http://192.168.100.79/Comedor/PlatBacrocorp.php'"> <img src="Inicio.jpg" width="65" /> </button> &nbsp;&nbsp;
-  <button class="btn btn-default115" id="Car" name='Carg' onclick="window.location.href='http://192.168.100.79/Comedor/uploadexcseg.php'"> <img src="Cargcon.png" width="50" /> </button>
+  <button class="btn btn-default1" id="Ini" name='Ini' onclick="window.location.href='<?php echo COMEDOR_URL; ?>/Comedor/PlatBacrocorp.php'"> <img src="Inicio.jpg" width="65" /> </button> &nbsp;&nbsp;
+  <button class="btn btn-default115" id="Car" name='Carg' onclick="window.location.href='<?php echo COMEDOR_URL; ?>/Comedor/uploadexcseg.php'"> <img src="Cargcon.png" width="50" /> </button>
   <button class="btn btn-default115" id="Edit" name='Edit' onclick="theFunction1();"> <img src="Contrato.jpg" width="70" /> </button>
   <button class="btn btn-default" id="Ec" name='Ec' onclick="theFunction();"> <img src="Basurero.jpg" width="50" /> </button> 
-  <button class="btn btn-default1" id="EX" name='EX' onclick="ExportToExcel('xlsx')"> <img src="EXCEL.PNG" width="50" />   <button class="btn btn-default1" id="EX" name='EX' onclick="toCelsius();"> <img src="Aprobacion.PNG" width="40" /> </button><a href="http://192.168.100.79/Comedor/PruebaTabla.php?newpwd=Ope01?">RECARGAR</a> <div  id="demo" style=" font-size: 25px;;background-color:#2D6DA6;color:white;"><?php echo $value ?></div> </button>  <form method="post" action="<?php echo htmlspecialchars("http://192.168.100.79/Comedor/PruebaTabla.php?newpwd=Ope01?");?>">   <label for="exampleFormControlInput1">Centro de costos:</label>
+  <button class="btn btn-default1" id="EX" name='EX' onclick="ExportToExcel('xlsx')"> <img src="EXCEL.PNG" width="50" />   <button class="btn btn-default1" id="EX" name='EX' onclick="toCelsius();"> <img src="Aprobacion.PNG" width="40" /> </button><a href="<?php echo COMEDOR_URL; ?>/Comedor/PruebaTabla.php?newpwd=Ope01?">RECARGAR</a> <div  id="demo" style=" font-size: 25px;;background-color:#2D6DA6;color:white;"><?php echo $value ?></div> </button>  <form method="post" action="<?php echo htmlspecialchars("<?php echo COMEDOR_URL; ?>/Comedor/PruebaTabla.php?newpwd=Ope01?");?>">   <label for="exampleFormControlInput1">Centro de costos:</label>
       <select class="selectpicker" id="Ncliente" name='Ncliente' required>
     </select>
 <button type="submit" class="btn btn-dark">Buscar</button>  

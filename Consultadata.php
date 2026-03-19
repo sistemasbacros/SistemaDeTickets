@@ -748,7 +748,7 @@ function test_input($data) {
 </head>
 <body>
     <!-- Botón Home -->
-    <a href="http://desarollo-bacros/TicketBacros/MenSG.php" id="homeButton" title="Inicio">
+    <a href="<?php echo BASE_URL; ?>/TicketBacros/MenSG.php" id="homeButton" title="Inicio">
         <i class="fas fa-home"></i>
     </a>
 
@@ -979,7 +979,7 @@ function test_input($data) {
                     alert('La fecha de inicio no puede ser mayor que la fecha fin');
                     return false;
                 }
-            });s
+            });
         });
     </script>
 </body>

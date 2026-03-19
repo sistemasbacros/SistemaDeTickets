@@ -144,11 +144,11 @@ div.scroll {
 
 	
 
-  <button class="btn btn-default1" id="Ini" name='Ini' onclick="window.location.href='http://192.168.100.79/Comedor/PlatBacrocorp.php'"> <img src="Inicio.jpg" width="24" /> </button> &nbsp;&nbsp;
-  <button class="btn btn-default115" id="Car" name='Carg' onclick="window.location.href='http://192.168.100.79/Comedor/uploadexcseg.php'"> <img src="Cargcon.png" width="24" /> </button>
+  <button class="btn btn-default1" id="Ini" name='Ini' onclick="window.location.href='<?php echo COMEDOR_URL; ?>/Comedor/PlatBacrocorp.php'"> <img src="Inicio.jpg" width="24" /> </button> &nbsp;&nbsp;
+  <button class="btn btn-default115" id="Car" name='Carg' onclick="window.location.href='<?php echo COMEDOR_URL; ?>/Comedor/uploadexcseg.php'"> <img src="Cargcon.png" width="24" /> </button>
   <button class="btn btn-default115" id="Edit" name='Edit' onclick="theFunction1();"> <img src="Contrato.jpg" width="24" /> </button>
   <button class="btn btn-default" id="Ec" name='Ec' onclick="theFunction();"> <img src="Basurero.jpg" width="24" /> </button> 
-  <button class="btn btn-default1" id="EX" name='EX' onclick="ExportToExcel('xlsx')"> <img src="EXCEL.PNG" width="24" />   <button class="btn btn-default1" id="EX" name='EX' onclick="toCelsius();"> <img src="Aprobacion.PNG" width="40" /> </button><a href="http://192.168.100.79/Comedor/PruebaTabla.php?newpwd=Ope01?">RECARGAR</a> <div  id="demo" style=" font-size: 25px;;background-color:#2D6DA6;color:white;"><?php echo $value ?></div> </button>  <form method="post" action="<?php echo htmlspecialchars("http://192.168.100.79/Comedor/PruebaTabla.php?newpwd=Ope01?");?>">   <label for="exampleFormControlInput1">Centro de costos:</label>
+  <button class="btn btn-default1" id="EX" name='EX' onclick="ExportToExcel('xlsx')"> <img src="EXCEL.PNG" width="24" />   <button class="btn btn-default1" id="EX" name='EX' onclick="toCelsius();"> <img src="Aprobacion.PNG" width="40" /> </button><a href="<?php echo COMEDOR_URL; ?>/Comedor/PruebaTabla.php?newpwd=Ope01?">RECARGAR</a> <div  id="demo" style=" font-size: 25px;;background-color:#2D6DA6;color:white;"><?php echo $value ?></div> </button>  <form method="post" action="<?php echo htmlspecialchars("<?php echo COMEDOR_URL; ?>/Comedor/PruebaTabla.php?newpwd=Ope01?");?>">   <label for="exampleFormControlInput1">Centro de costos:</label>
       <select class="selectpicker" id="Ncliente" name='Ncliente' required>
     </select>
 <button type="submit" class="btn btn-dark">Buscar</button>  
@@ -1156,7 +1156,7 @@ myParam=='Ope01?' && index1=='21'|| myParam=='Ope01?' && index1=='27' || myParam
 myParam=='Ope01?' && index1=='39'|| myParam=='Ope01?' && index1=='45' || myParam=='Ope01?' && index1=='51' ||
 myParam=='Ope01?' && index1=='57'|| myParam=='Ope01?' && index1=='63' || myParam=='Ope01?' && index1=='69'
 ) {
-window.open('http://192.168.100.79/Comedor/editcamposegcont.php?newpwd=Ope01?','Actualiza tus campos','toolbars=0,width=500,height=500,right=200, top=200,scrollbars=1,resizable=5');
+window.open('<?php echo COMEDOR_URL; ?>/Comedor/editcamposegcont.php?newpwd=Ope01?','Actualiza tus campos','toolbars=0,width=500,height=500,right=200, top=200,scrollbars=1,resizable=5');
 } else  { alert('No se puede edítar el registro.Con esta cuenta')} 
 			
 			// window.location.href = 'http://192.168.100.79/Comedor/FormularioCargaeqSC.php'; //Will take you to Google.
@@ -1329,7 +1329,7 @@ var arrayJson=JSON.stringify(prueba);
  
 			// Mostramos el texto devuelto por el archivo php
 			// alert(data);
-						window.location.href = 'http://192.168.100.79/Comedor/FormularioCargaeqSC.php'; //Will take you to Google.
+						window.location.href = '<?php echo COMEDOR_URL; ?>/Comedor/FormularioCargaeqSC.php';
 	
 			
 		});
