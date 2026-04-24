@@ -8,111 +8,109 @@
  * de API para obtener datos de tickets. Cuando se llama con el parámetro
  * action=getData, retorna JSON; de lo contrario, renderiza la vista HTML.
  *
- * Funcionalidades:
- * - Vista de dashboard con estadísticas de tickets
- * - API endpoint para obtener datos (?action=getData)
- * - Consulta completa de todos los campos de tickets
- * - Formateo de fechas a formato dd/mm/yyyy
- * - Formateo de horas a formato HH:MM:SS
+ * La fuente de datos es el Rust API (GET /api/TicketBacros/tickets).
+ * Los campos se remapean al formato que espera el JS del dashboard:
+ *   - Empresa → Departamento
+ *   - responsable → Responsable
+ *   - id_ticket → NoTicket
  *
- * Columnas retornadas por la API:
- * - Nombre, Correo, Prioridad, Departamento (Empresa)
- * - Asunto, Mensaje, Adjuntos
- * - Fecha, Hora, NoTicket (Id_Ticket), Estatus
- * - Responsable (PA)
- * - Timestamps de estados: EnProceso, Pausa, Terminado, etc.
- *
- * @module Módulo de Dashboard TI
- * @access Público / API
- *
- * @dependencies
- * - PHP: sqlsrv extension
- * - JS CDN: DataTables, Bootstrap, Chart.js
- *
- * @database
- * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
- * - Base de datos: Ticket
- * - Tabla: T3 (consulta)
+ * @note Migrado de sqlsrv directo al Rust API. Los timestamps de Pausa,
+ *       Terminado y Cancelado no son devueltos por el endpoint actual;
+ *       se incluyen como null para mantener compatibilidad.
  *
  * @api_endpoints
- * - GET ?action=getData → JSON con array de tickets
- *
- * @inputs
- * - GET['action']: 'getData' para modo API (opcional)
- *
- * @outputs
- * - HTML: Dashboard completo (sin action param)
- * - JSON: Array de tickets (con action=getData)
- *
- * @security
- * - ADVERTENCIA: Sin autenticación
- * - Credenciales hardcoded
- * - Header Content-Type establecido
+ * - GET ?action=getData → JSON con array de tickets (sin envolver en "data")
  *
  * @author Equipo Tecnología BacroCorp
- * @version 1.5
+ * @version 2.0
  * @since 2024
+ * @updated 2026-04-23
  */
 
-// -- BACKEND PHP: Conexión y consulta --
-
-header('Content-Type: text/html; charset=utf-8');
-require_once __DIR__ . '/config.php';
-$serverName = $DB_SERVER;
-$connectionOptions = [
-  "Database" => $DB_DATABASE,
-  "UID" => $DB_USERNAME,
-  "PWD" => $DB_PASSWORD,
-  "CharacterSet" => "UTF-8",
-  "TrustServerCertificate" => true,
-  "Encrypt" => true
-];
-
-// Conectar a SQL Server
-$conn = sqlsrv_connect($serverName, $connectionOptions);
-
-if ($conn === false) {
-    die(print_r(sqlsrv_errors(), true));
-}
-
-// Si se solicita la data en JSON (ajax)
+// ── Si se solicita la data en JSON (ajax) ─────────────────────────────────────
 if (isset($_GET['action']) && $_GET['action'] === 'getData') {
-    $sql = "
-    SELECT 
-        [Nombre], [Correo], [Prioridad], [Empresa] AS Departamento, [Asunto], [Mensaje], [Adjuntos],
-        CONVERT(varchar, TRY_CONVERT(date, fecha, 103), 103) AS Fecha,  
-        CONVERT(varchar(8), Hora, 108) AS Hora,
-        [Id_Ticket] AS NoTicket, [Estatus], [PA] AS Responsable,
-        CONVERT(varchar, TRY_CONVERT(date, FechaEnProceso, 103), 103) AS FechaEnProceso,
-        CONVERT(varchar(8), HoraEnProceso, 108) AS HoraEnProceso,
-        CONVERT(varchar, TRY_CONVERT(date, FechaPausa, 103), 103) AS FechaPausa,
-        CONVERT(varchar(8), HoraPausa, 108) AS HoraPausa,
-        CONVERT(varchar, TRY_CONVERT(date, FechaTerminado, 103), 103) AS FechaTerminado,
-        CONVERT(varchar(8), HoraTerminado, 108) AS HoraTerminado,
-        CONVERT(varchar, TRY_CONVERT(date, FechaCancelado, 103), 103) AS FechaCancelado,
-        CONVERT(varchar(8), HoraCancelado, 108) AS HoraCancelado
-    FROM [dbo].[T3] 
-    WHERE YEAR(TRY_CONVERT(date, fecha, 103)) = YEAR(GETDATE()) 
-      AND MONTH(TRY_CONVERT(date, fecha, 103)) = MONTH(GETDATE())
-    ORDER BY TRY_CONVERT(date, fecha, 103) DESC;
-    ";
+    header('Content-Type: application/json');
 
-    $stmt = sqlsrv_query($conn, $sql);
+    require_once __DIR__ . '/config.php';
 
-    if ($stmt === false) {
-        echo json_encode(["error" => sqlsrv_errors()]);
+    // URL base del Rust API
+    $apiUrl   = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
+    $endpoint = $apiUrl . '/api/TicketBacros/tickets';
+
+    // Llamada al API con cURL
+    $ch = curl_init($endpoint);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+    ]);
+    $responseBody = curl_exec($ch);
+    $httpCode     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError    = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlError || $httpCode < 200 || $httpCode >= 300) {
+        echo json_encode([]);
         exit;
     }
 
-    $data = [];
-    while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-        $data[] = $row;
+    $apiResponse = json_decode($responseBody, true);
+
+    if (!isset($apiResponse['data']) || !is_array($apiResponse['data'])) {
+        echo json_encode([]);
+        exit;
     }
 
+    // ── Transformación: snake_case del API → aliases que usa el JS del dashboard ─
+    //
+    // El Rust API devuelve TicketTiData (snake_case):
+    //   nombre, correo, prioridad, empresa, asunto, mensaje, adjuntos,
+    //   fecha, hora, id_ticket, estatus, responsable,
+    //   fecha_en_proceso, hora_en_proceso
+    //
+    // El JS del dashboard espera:
+    //   Nombre, Correo, Prioridad, Departamento, Asunto, Mensaje, Adjuntos,
+    //   Fecha, Hora, NoTicket, Estatus, Responsable,
+    //   FechaEnProceso, HoraEnProceso,
+    //   FechaPausa, HoraPausa, FechaTerminado, HoraTerminado,
+    //   FechaCancelado, HoraCancelado
+    //
+    // Campos no disponibles en el endpoint actual → null
+
+    $data = [];
+    foreach ($apiResponse['data'] as $ticket) {
+        $data[] = [
+            'Nombre'         => $ticket['nombre']           ?? '',
+            'Correo'         => $ticket['correo']           ?? '',
+            'Prioridad'      => $ticket['prioridad']        ?? '',
+            'Departamento'   => $ticket['empresa']          ?? '',
+            'Asunto'         => $ticket['asunto']           ?? '',
+            'Mensaje'        => $ticket['mensaje']          ?? '',
+            'Adjuntos'       => $ticket['adjuntos']         ?? '',
+            'Fecha'          => $ticket['fecha']            ?? null,
+            'Hora'           => $ticket['hora']             ?? null,
+            'NoTicket'       => $ticket['id_ticket']        ?? '',
+            'Estatus'        => $ticket['estatus']          ?? '',
+            'Responsable'    => $ticket['responsable']      ?? null,
+            'FechaEnProceso' => $ticket['fecha_en_proceso'] ?? null,
+            'HoraEnProceso'  => $ticket['hora_en_proceso']  ?? null,
+            // No disponibles en el endpoint actual
+            'FechaPausa'     => null,
+            'HoraPausa'      => null,
+            'FechaTerminado' => null,
+            'HoraTerminado'  => null,
+            'FechaCancelado' => null,
+            'HoraCancelado'  => null,
+        ];
+    }
+
+    // El JS original espera un array plano (no envuelto en "data")
     echo json_encode($data);
     exit;
 }
 
+// ── A partir de aquí: renderizado HTML del dashboard ─────────────────────────
+header('Content-Type: text/html; charset=utf-8');
 ?>
 
 <!DOCTYPE html>

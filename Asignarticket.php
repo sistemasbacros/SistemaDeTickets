@@ -8,70 +8,55 @@
  * al personal disponible (tabla conped). Permite visualizar tickets pendientes
  * y asignarlos a técnicos o personal de mantenimiento.
  *
- * Este módulo trabaja con la tabla TicketsSG (diferente a T3 usada por TI)
- * y consulta la tabla conped para obtener la lista de personal disponible
- * para asignación.
- *
- * Características:
- * - Conexión directa a SQL Server
- * - Consulta de personal ordenado por nombre
- * - Vista de tickets con todos los campos relevantes
- * - Sin verificación de sesión (considerar agregar seguridad)
- *
- * Datos consultados de tickets:
- * - Id_Ticket, Nombre, Correo, Prioridad, Departamento (Empresa)
- * - Asunto, Problema (Adjuntos), Mensaje
- * - Fecha/Hora de captura, proceso y término
- * - Estatus, Enlace
- *
- * @module Módulo de Servicios Generales
- * @access Público (ADVERTENCIA: sin autenticación)
- *
- * @dependencies
- * - PHP: sqlsrv extension
- * - JS CDN: Bootstrap, DataTables
- *
- * @database
- * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
- * - Base de datos: Ticket
- * - Tablas:
- *   - conped: Catálogo de personal (nombre)
- *   - TicketsSG: Tickets de Servicios Generales
- *
- * @security
- * - ADVERTENCIA: Sin verificación de sesión
- * - Credenciales hardcoded
- * - die() expone errores de SQL al cliente
+ * Migrado a Rust API:
+ * - GET /api/TicketBacros/personal  → lista de personal (conped)
+ * - GET /api/TicketBacros/tickets-sg → tickets de Servicios Generales
  *
  * @author Equipo Tecnología BacroCorp
- * @version 1.2
+ * @version 2.0
  * @since 2024
  */
 
-// Conexión SQL Server
 require_once __DIR__ . '/config.php';
-$connectionInfo = array("Database" => $DB_DATABASE, "UID" => $DB_USERNAME, "PWD" => $DB_PASSWORD, "CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
-$conn = sqlsrv_connect($DB_SERVER, $connectionInfo);
-if (!$conn) die(print_r(sqlsrv_errors(), true));
+$apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
 
-// Obtener personal (conped)
-$sql = "SELECT * FROM conped ORDER BY nombre";
-$stmt = sqlsrv_query($conn, $sql);
+// Obtener personal desde la API
 $usuarios = [];
-while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-    $usuarios[] = $row['Nombre'];
+$ch = curl_init($apiUrl . '/api/TicketBacros/personal');
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT        => 10,
+    CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+]);
+$resp = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+if ($httpCode === 200 && $resp) {
+    $data = json_decode($resp, true);
+    if (is_array($data)) {
+        foreach ($data as $row) {
+            $usuarios[] = $row['Nombre'] ?? $row['nombre'] ?? '';
+        }
+        $usuarios = array_filter($usuarios);
+    }
 }
 
-// Obtener tickets
-$sql1 = "SELECT Id_Ticket AS Id, Nombre, Correo, Prioridad, Empresa AS Departamento, Asunto, Adjuntos AS Problema, Mensaje, 
-    CAST(Fecha AS CHAR) AS Fecha_capturat, LEFT(CAST(Hora AS CHAR), 8) AS Hora_capturat, Estatus ,
-    CAST(fecha_proceso AS CHAR) as fecha_proceso, LEFT(CAST(hora_proceso AS CHAR), 8) AS hora_proceso,
-    CAST(Fecha_Termino AS CHAR) as Fecha_Termino, LEFT(CAST(Hora_Termino AS CHAR), 8) AS Hora_Termino, Enlace
-    FROM TicketsSG";
-$stmt1 = sqlsrv_query($conn, $sql1);
+// Obtener tickets de Servicios Generales desde la API
 $tickets = [];
-while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
-    $tickets[] = $row;
+$ch = curl_init($apiUrl . '/api/TicketBacros/tickets-sg');
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT        => 10,
+    CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+]);
+$resp = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+if ($httpCode === 200 && $resp) {
+    $data = json_decode($resp, true);
+    if (is_array($data)) {
+        $tickets = $data;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -80,19 +65,19 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes" />
     <title>PROCESA TUS TICKETS | BACROCORP</title>
-    
+
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-    
+
     <!-- DataTables CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
-    
+
     <!-- DataTables Buttons -->
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap5.min.css" />
-    
+
     <!-- Google Fonts: Inter (mejor legibilidad) -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet" />
-    
+
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
@@ -123,7 +108,7 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: 
+            background-image:
                 radial-gradient(circle at 20% 30%, rgba(0, 71, 151, 0.03) 0%, transparent 40%),
                 radial-gradient(circle at 80% 70%, rgba(0, 41, 87, 0.03) 0%, transparent 40%);
             pointer-events: none;
@@ -415,14 +400,14 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
             font-size: 0.9rem;
         }
 
-        .priority-alto { 
-            color: #b02a37; 
+        .priority-alto {
+            color: #b02a37;
         }
-        .priority-medio { 
-            color: #b85e00; 
+        .priority-medio {
+            color: #b85e00;
         }
-        .priority-bajo { 
-            color: #0b6b3f; 
+        .priority-bajo {
+            color: #0b6b3f;
         }
 
         .priority-dot {
@@ -432,16 +417,16 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
             display: inline-block;
         }
 
-        .priority-dot.alto { 
-            background: #b02a37; 
+        .priority-dot.alto {
+            background: #b02a37;
             box-shadow: 0 0 0 2px rgba(176,42,55,0.2);
         }
-        .priority-dot.medio { 
-            background: #b85e00; 
+        .priority-dot.medio {
+            background: #b85e00;
             box-shadow: 0 0 0 2px rgba(184,94,0,0.2);
         }
-        .priority-dot.bajo { 
-            background: #0b6b3f; 
+        .priority-dot.bajo {
+            background: #0b6b3f;
             box-shadow: 0 0 0 2px rgba(11,107,63,0.2);
         }
 
@@ -603,29 +588,29 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
         /* Responsive */
         @media (max-width: 768px) {
             body { padding: 12px; }
-            
+
             .content-card { padding: 20px; }
-            
+
             .page-header {
                 flex-direction: column;
                 align-items: flex-start;
                 gap: 15px;
             }
-            
+
             .header-title { font-size: 1.7rem; }
-            
+
             .logo-box {
                 width: 70px;
                 height: 70px;
                 align-self: flex-end;
             }
-            
+
             .status-bar {
                 padding: 10px 18px;
                 gap: 15px;
                 font-size: 0.85rem;
             }
-            
+
             #homeButton {
                 top: 12px;
                 left: 12px;
@@ -633,30 +618,30 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
                 height: 45px;
                 font-size: 20px;
             }
-            
+
             .dataTables_filter input { width: 100%; }
-            
+
             .main-container {
                 margin-top: 60px;
             }
         }
 
         /* Scrollbar */
-        ::-webkit-scrollbar { 
-            width: 10px; 
-            height: 10px; 
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
         }
-        ::-webkit-scrollbar-track { 
-            background: #edf2f7; 
+        ::-webkit-scrollbar-track {
+            background: #edf2f7;
             border-radius: 10px;
         }
-        ::-webkit-scrollbar-thumb { 
-            background: #9bb0c7; 
-            border-radius: 10px; 
+        ::-webkit-scrollbar-thumb {
+            background: #9bb0c7;
+            border-radius: 10px;
             border: 2px solid #edf2f7;
         }
-        ::-webkit-scrollbar-thumb:hover { 
-            background: #004787; 
+        ::-webkit-scrollbar-thumb:hover {
+            background: #004787;
         }
     </style>
 </head>
@@ -725,7 +710,7 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
                         <label class="form-label">
                             <i class="fas fa-user me-1"></i> Asignar a:
                         </label>
-                        <input type="text" class="form-control" id="asignadoA" name="asignadoA" 
+                        <input type="text" class="form-control" id="asignadoA" name="asignadoA"
                                placeholder="Nombre completo" required />
                     </div>
                     <div class="mb-3">
@@ -771,52 +756,70 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
 
     <script>
         const tickets = <?php echo json_encode($tickets); ?>;
-        
+
         // Formatear datos
         const formattedTickets = tickets.map(t => {
+            // Normalizar campos (la API puede devolver snake_case o PascalCase)
+            const id        = t.Id ?? t.Id_Ticket ?? t.id_ticket ?? '-';
+            const nombre    = t.Nombre ?? t.nombre ?? '-';
+            const correo    = t.Correo ?? t.correo ?? '-';
+            const prioridad = t.Prioridad ?? t.prioridad ?? '-';
+            const depto     = t.Departamento ?? t.Empresa ?? t.empresa ?? '-';
+            const asunto    = t.Asunto ?? t.asunto ?? '-';
+            const problema  = t.Problema ?? t.Adjuntos ?? t.adjuntos ?? '-';
+            const mensaje   = t.Mensaje ?? t.mensaje ?? '-';
+            const fecha     = t.Fecha_capturat ?? t.Fecha ?? t.fecha ?? '-';
+            const hora      = t.Hora_capturat ?? t.Hora ?? t.hora ?? '-';
+            const estatus   = t.Estatus ?? t.estatus ?? '-';
+            const fProceso  = t.fecha_proceso ?? t.FechaProceso ?? '-';
+            const hProceso  = t.hora_proceso ?? t.HoraProceso ?? '-';
+            const fTermino  = t.Fecha_Termino ?? t.FechaTermino ?? '-';
+            const hTermino  = t.Hora_Termino ?? t.HoraTermino ?? '-';
+            const enlace    = t.Enlace ?? t.enlace ?? '';
+
             // Prioridad con punto de color
-            let prioridadHTML = t.Prioridad;
-            if (t.Prioridad && t.Prioridad.includes('Alto')) {
-                prioridadHTML = '<span class="priority-tag priority-alto"><span class="priority-dot alto"></span> ' + t.Prioridad + '</span>';
-            } else if (t.Prioridad && t.Prioridad.includes('Medio')) {
-                prioridadHTML = '<span class="priority-tag priority-medio"><span class="priority-dot medio"></span> ' + t.Prioridad + '</span>';
+            let prioridadHTML = prioridad;
+            if (prioridad && prioridad.includes('Alto')) {
+                prioridadHTML = '<span class="priority-tag priority-alto"><span class="priority-dot alto"></span> ' + prioridad + '</span>';
+            } else if (prioridad && prioridad.includes('Medio')) {
+                prioridadHTML = '<span class="priority-tag priority-medio"><span class="priority-dot medio"></span> ' + prioridad + '</span>';
             } else {
-                prioridadHTML = '<span class="priority-tag priority-bajo"><span class="priority-dot bajo"></span> ' + t.Prioridad + '</span>';
+                prioridadHTML = '<span class="priority-tag priority-bajo"><span class="priority-dot bajo"></span> ' + prioridad + '</span>';
             }
 
             // Estatus
             let estatusClass = 'status-pendiente';
-            if (t.Estatus && t.Estatus.includes('proceso')) estatusClass = 'status-proceso';
-            else if (t.Estatus && t.Estatus.includes('Resuelto')) estatusClass = 'status-resuelto';
-            else if (t.Estatus && t.Estatus.includes('Cancelado')) estatusClass = 'status-cancelado';
-            
-            let estatusHTML = `<span class="status-badge ${estatusClass}"><i class="fas fa-circle" style="font-size: 0.4rem;"></i> ${t.Estatus || '-'}</span>`;
+            if (estatus && estatus.includes('proceso')) estatusClass = 'status-proceso';
+            else if (estatus && estatus.includes('Resuelto')) estatusClass = 'status-resuelto';
+            else if (estatus && estatus.includes('Cancelado')) estatusClass = 'status-cancelado';
+
+            let estatusHTML = `<span class="status-badge ${estatusClass}"><i class="fas fa-circle" style="font-size: 0.4rem;"></i> ${estatus || '-'}</span>`;
 
             // Evidencia
-            let evidenciaHTML = t.Enlace ? 
-                `<a href="${t.Enlace}" target="_blank" class="link-evidencia">
+            let evidenciaHTML = enlace ?
+                `<a href="${enlace}" target="_blank" class="link-evidencia">
                     <i class="fas fa-image"></i> Ver
-                </a>` : 
+                </a>` :
                 '<span style="color: #9aa6b5; font-size: 0.8rem;"><i class="fas fa-times-circle"></i> Sin evidencia</span>';
 
             return [
-                t.Id || '-',
-                t.Nombre || '-',
-                t.Correo || '-',
+                id,
+                nombre,
+                correo,
                 prioridadHTML,
-                t.Departamento || '-',
-                t.Asunto || '-',
-                t.Problema ? (t.Problema.length > 35 ? t.Problema.substring(0, 35) + '…' : t.Problema) : '-',
-                t.Mensaje ? (t.Mensaje.length > 30 ? t.Mensaje.substring(0, 30) + '…' : t.Mensaje) : '-',
-                t.Fecha_capturat || '-',
-                t.Hora_capturat || '-',
+                depto,
+                asunto,
+                problema ? (problema.length > 35 ? problema.substring(0, 35) + '…' : problema) : '-',
+                mensaje ? (mensaje.length > 30 ? mensaje.substring(0, 30) + '…' : mensaje) : '-',
+                fecha,
+                hora,
                 estatusHTML,
-                t.fecha_proceso || '-',
-                t.hora_proceso || '-',
-                t.Fecha_Termino || '-',
-                t.Hora_Termino || '-',
+                fProceso,
+                hProceso,
+                fTermino,
+                hTermino,
                 evidenciaHTML,
-                `<button class="btn-asignar assign-btn" data-id="${t.Id}">
+                `<button class="btn-asignar assign-btn" data-id="${id}">
                     <i class="fas fa-user-tag"></i> Asignar
                 </button>`
             ];
@@ -850,7 +853,7 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
             responsive: false,
             scrollX: false,
             autoWidth: true,
-            stripeClasses: ['', 'bg-light'], // Para filas alternadas
+            stripeClasses: ['', 'bg-light'],
             language: {
                 url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
             },
@@ -877,7 +880,7 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
         // Enviar asignación
         $('#assignForm').on('submit', function (e) {
             e.preventDefault();
-            
+
             let formData = new FormData(this);
 
             $.ajax({
@@ -887,11 +890,11 @@ while ($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
                 processData: false,
                 contentType: false,
                 success: function (resp) {
-                    alert('✅ Ticket actualizado correctamente');
+                    alert('Ticket actualizado correctamente');
                     location.reload();
                 },
                 error: function () {
-                    alert('❌ Error al actualizar el ticket');
+                    alert('Error al actualizar el ticket');
                 }
             });
         });

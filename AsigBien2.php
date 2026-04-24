@@ -4,11 +4,11 @@
  * @brief Módulo de asignación de bienes - Variante 2.
  *
  * @description
- * Variante 2 del módulo de asignación de bienes. Procesa datos
- * de la sesión para operaciones de asignación de recursos.
+ * Variante 2 del módulo de asignación de bienes. Registra la fecha
+ * y hora de ingreso del vehículo al taller mediante la API REST.
  *
- * Archivo más corto que las otras variantes (231 líneas vs 290-294),
- * posiblemente con funcionalidad reducida o específica.
+ * Archivo más enfocado que las otras variantes: únicamente actualiza
+ * Fecha_Ingreso y HORA_Ingreso en el registro vehicular.
  *
  * @module Módulo de Asignación de Bienes
  * @access Requiere sesión activa con datos
@@ -22,54 +22,23 @@
  * @see AsigBien.php, AsigBien1.php
  *
  * @author Equipo Tecnología BacroCorp
- * @version 1.0
+ * @version 2.0 - Migrado a API REST (sin SQL injection)
  * @since 2024
  */
 
- session_start(); // this NEEDS TO BE AT THE TOP of the page before any output etc
-   // echo $_SESSION['superhero'];
- 
-$array1 = [];
-// $array2 = [];
-// $array3 = [];
-// $array4 = [];
-// $array5 = [];
-// $array6 = [];
-// $array7 = [];
- 
- foreach($_SESSION['superhero'] as $valor)
-{
-	
- // echo "\n- ".$valor;
-array_push($array1,$valor);
+session_start(); // this NEEDS TO BE AT THE TOP of the page before any output etc
+  // echo $_SESSION['superhero'];
 
+$array1 = [];
+
+foreach($_SESSION['superhero'] as $valor)
+{
+  // echo "\n- ".$valor;
+  array_push($array1, $valor);
 }
 
-
-
-// echo $array1[0];
-// echo $array1[1];
-// echo $array1[2];
-// echo $array1[3];
-// echo $array1[4];
-// echo $array1[5];
-// echo $array1[6];
-
-
 ?>
 
-
-<?php
-// echo $array1[9];
-// echo $array1[1];
-// echo $array1[2];
-// echo $array1[3];
-// echo $array1[4];
-// echo $array1[5];
-// echo $array1[6];
-
-
-?>
 
 <!DOCTYPE html>
 <html lang="en">
@@ -81,32 +50,28 @@ array_push($array1,$valor);
     <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
-	
-	
-	
+
+
+
     <style>
         .bcontent {
             margin-top: 10px;
         }
-		
+
 .is-required:after {
   content: '*';
   margin-left:5px;
   color: red;
   font-weight: bold;
-}		
-	
+}
 
-	
-	
 
-	
     </style>
 </head>
 <body>
 <h2>Asigna tu fecha de ingreso</h2>  <img src="Logo2.png" width="50" height="50" align="right"> </div>
     <div class="container bcontent">
-<form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]);?>">  
+<form id="formAsignar2" method="post" action="#">
 
         <div class="form-group">
             <label for="startDate" class="col-sm-3 col-form-label is-required"  style="color:black;font-size:20px;font-weight: bold;">Fecha</label>
@@ -115,7 +80,7 @@ array_push($array1,$valor);
         </div>
        <div class="form-group">
     <label for="exampleFormControlInput1" class="col-sm-3 col-form-label is-required"  style="color:black;font-size:20px;font-weight: bold;">Hora</label>
-    <input type="text" class="form-control" id="Hora" name= 'Hora'  required readonly>
+    <input type="text" class="form-control" id="Hora" name='Hora'  required readonly>
   </div>
   <!-- Checkbox -->
   <div class="form-check d-flex justify-content-center mb-4">
@@ -126,6 +91,9 @@ array_push($array1,$valor);
   <button type="submit" class="btn btn-primary">Asignar</button>
 </form>
 
+<!-- Mensaje de resultado -->
+<div id="mensajeResultado" style="margin-top:15px;"></div>
+
     </div>
 </body>
 </html>
@@ -134,125 +102,98 @@ array_push($array1,$valor);
 	<script>
 var hoy = new Date();
 var fecha = hoy.getDate() + '/' + ( hoy.getMonth() + 1 ) + '/' + hoy.getFullYear();
-var hora = hoy.getHours() + ':' + hoy.getMinutes() + ':' + hoy.getSeconds(); 
+var hora = hoy.getHours() + ':' + hoy.getMinutes() + ':' + hoy.getSeconds();
 var fechaYHora =  "Fol"+ " " + fecha + ' ' + hora;
 
-// alert(fecha)
-// alert(hora)
+// IDT del vehículo tomado de la sesión PHP ($array1[0])
+var vehiculoIdt = "<?php echo addslashes($array1[0]) ?>";
+
+  document.getElementById('fecha').value = fecha
+
+document.getElementById('Hora').value = hora
 
 
-
-///alert(fechaYHora)
-   ///document.getElementById('email').value = fechaYHora  
-   
-   
-   $(document).ready(function() {
-    var todayDate = (function(){ 
+$(document).ready(function() {
+    var todayDate = (function(){
       var d = new Date();
       var day = d.getDate();
       day =  day > 9 ? day : '0' + day ;
       var month = (d.getMonth() + 1);
       month = month > 9 ? month : '0' + month;
-      var _value =  day + '/' + month  + '/' + d.getFullYear(); 
-      return _value; 
+      var _value =  day + '/' + month  + '/' + d.getFullYear();
+      return _value;
     })();
-    $('#fecha').datepicker({
-      format: 'dd/mm/yyyy',
-      value: todayDate
-   });
+    // Solo inicializar datepicker si está disponible
+    if ($.fn.datepicker) {
+      $('#fecha').datepicker({
+        format: 'dd/mm/yyyy',
+        value: todayDate
+      });
+    }
 });
-   
- 
-  document.getElementById('fecha').value = fecha   
- 
-document.getElementById('Hora').value = hora   
-   
-document.getElementById("tik").value = fechaYHora+':'+hoy.getMilliseconds();
-	</script>
 
 
-
-
-<?php
-
-// // $pedido = $name = $email = $gender = $comment = $website = "";
-
-
-// echo $array1[9];
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-	
-	
-	 // // if (empty( $name1)) {
-    // // echo '$var es o bien 0, vacía, o no se encuentra definida en absoluto';
-// // }else {}
-
-	
-  $name8 = test_input($_POST["fecha"]); /// folio
-  $name9 = test_input($_POST["Hora"]); /// folio
-  
-  
-
-  
-  
- // $name10 = test_input($_POST["Hora"]); /// folio
-
-
-// echo $name7;
-// echo "<br>";
-// echo $name8;
-// echo "<br>";
-// echo $name6;
-// echo "<br>";
-
-// ////////////////// Update
-
-// ////////////////// Insert
-require_once __DIR__ . '/config.php';
-$serverName = $DB_SERVER;
-$connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD, "CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
-$conn = sqlsrv_connect( $serverName, $connectionInfo);
-
-
-// if( $conn ) {
-     // echo "Conexión establecida.<br />";
-// }else{
-     // echo "Conexión no se pudo establecer.<br />";
-     // die( print_r( sqlsrv_errors(), true));
-// }
-
-// // echo $name7; 
-
-$sql = "Update TMANVEHI  set Fecha_Ingreso=ltrim(rtrim(cast(convert(date,'$name8', 103)as nvarchar))),HORA_Ingreso='$name9' where idt='$array1[0]'";
-
-
-
-
-// if ($name8 == 'En proceso') {
-// $sql = "Update T3 set PA= '$name7',Estatus='$name8 ',Tiempo_Ejec='$name6',Tipo='$name9', HoraT='$name10' where Id_Ticket='$array1[9]'";
-// }
-
-
-// if ($name8 == 'Atendido') {
-// $sql = "Update T3 set PA= '$name7',Estatus='$name8 ',Tiempo_Ejec='$name6',FinT='$name9', FeT='$name10' where Id_Ticket='$array1[9]'";
-// }
-
-
-$stmt = sqlsrv_query( $conn, $sql );
-
-  
-  echo'<script type="text/javascript">
-alert("Se asigno el ticket");
-    </script>';
-	
-
+/**
+ * Convierte una fecha en formato dd/mm/yyyy a yyyy-mm-dd
+ * para enviarse a la API REST.
+ */
+function convertirFecha(fechaDDMMYYYY) {
+    var partes = fechaDDMMYYYY.split('/');
+    if (partes.length === 3) {
+        return partes[2] + '-' + partes[1] + '-' + partes[0];
+    }
+    return fechaDDMMYYYY;
 }
 
-function test_input($data) {
-  $data = trim($data);
-  $data = stripslashes($data);
-  $data = htmlspecialchars($data);
-  return $data;
- }
-// // https://www.dynamsoft.com/codepool/mobile-qr-code-scanner-in-html5.html
-?>
+
+// Interceptar el envío del formulario y llamar a la API REST
+document.getElementById('formAsignar2').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    var fechaDisplay = document.getElementById('fecha').value;
+    var horaDisplay  = document.getElementById('Hora').value;
+
+    if (!vehiculoIdt || vehiculoIdt.trim() === '') {
+        alert('No se encontró el IDT del vehículo en la sesión.');
+        return;
+    }
+
+    // Convertir fecha de dd/mm/yyyy a yyyy-mm-dd para la API
+    var fechaISO = convertirFecha(fechaDisplay);
+
+    // Solo actualizamos fecha_ingreso y hora_ingreso; los demás campos
+    // se envían vacíos y el servicio Rust los interpretará como sin cambio
+    // (el UPDATE_VEHICULO en el repositorio actualiza todos los campos,
+    //  por lo que enviamos strings vacíos para los campos que no aplican aquí)
+    var body = {
+        idt:          vehiculoIdt.trim(),
+        fecha_ingreso: fechaISO,
+        hora_ingreso:  horaDisplay
+    };
+
+    fetch('http://host.docker.internal:3000/api/TicketBacros/vehiculos/' + encodeURIComponent(vehiculoIdt.trim()), {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body)
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            return response.text().then(function(text) {
+                throw new Error('Error ' + response.status + ': ' + text);
+            });
+        }
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            alert('Se asigno el ticket');
+        } else {
+            alert('No se pudo registrar la fecha de ingreso: ' + (data.message || 'Error desconocido'));
+        }
+    })
+    .catch(function(err) {
+        console.error('Error al actualizar fecha de ingreso vehicular:', err);
+        alert('Error al conectar con el servidor: ' + err.message);
+    });
+});
+	</script>

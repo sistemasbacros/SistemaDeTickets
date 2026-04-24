@@ -149,48 +149,47 @@ $array_tt9 = []; // Fecha
 $array_tt10 = []; // Hora
 $array_tt11 = []; // Estatus
 
+// URL de la API Rust
+$apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
+
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["filterNombre"])) {
     $name1 = test_input($_POST["filterNombre"]);
     $name2 = test_input($_POST["filterFechaInicio"]);
     $name3 = test_input($_POST["filterFechaFin"]);
-    
-    if (!empty($name1) && !empty($name2) && !empty($name3) && $conn) {
-        $sql1 = "SELECT 
-                    Id_Ticket,
-                    Nombre,
-                    Prioridad,
-                    Empresa,
-                    Area_Piso,
-                    Asunto,
-                    Mensaje,
-                    Adjuntos as Problema,
-                    CONVERT(varchar, Fecha, 23) as Fecha,
-                    LEFT(CONVERT(varchar, Hora, 8), 8) as Hora,
-                    Estatus
-                FROM [dbo].[TicketsSG] 
-                WHERE Nombre = ? 
-                AND Fecha >= ? 
-                AND Fecha <= ?
-                ORDER BY Fecha DESC, Hora DESC";
-        
-        $params = array($name1, $name2, $name3);
-        $stmt1 = sqlsrv_query($conn, $sql1, $params);
-        
-        if ($stmt1) {
-            while($row = sqlsrv_fetch_array($stmt1, SQLSRV_FETCH_ASSOC)) {
-                array_push($array_tt1, $row['Id_Ticket'] ?? '');
-                array_push($array_tt2, $row['Nombre'] ?? '');
-                array_push($array_tt3, $row['Prioridad'] ?? '');
-                array_push($array_tt4, $row['Empresa'] ?? '');
-                array_push($array_tt5, $row['Area_Piso'] ?? '');
-                array_push($array_tt6, $row['Asunto'] ?? '');
-                array_push($array_tt7, $row['Mensaje'] ?? '');
-                array_push($array_tt8, $row['Problema'] ?? '');
-                array_push($array_tt9, $row['Fecha'] ?? '');
-                array_push($array_tt10, $row['Hora'] ?? '');
-                array_push($array_tt11, $row['Estatus'] ?? '');
+
+    if (!empty($name1) && !empty($name2) && !empty($name3)) {
+        $queryString = http_build_query([
+            'nombre'       => $name1,
+            'fecha_inicio' => $name2,
+            'fecha_fin'    => $name3,
+        ]);
+
+        $endpoint = $apiUrl . '/api/TicketBacros/tickets-sg?' . $queryString;
+
+        $ch = curl_init($endpoint);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode === 200 && $response !== false) {
+            $json = json_decode($response, true);
+            $tickets = $json['data'] ?? [];
+
+            foreach ($tickets as $row) {
+                array_push($array_tt1, $row['Id_Ticket']  ?? $row['id_ticket']  ?? '');
+                array_push($array_tt2, $row['Nombre']     ?? $row['nombre']     ?? '');
+                array_push($array_tt3, $row['Prioridad']  ?? $row['prioridad']  ?? '');
+                array_push($array_tt4, $row['Empresa']    ?? $row['empresa']    ?? '');
+                array_push($array_tt5, $row['Area_Piso']  ?? $row['area_piso']  ?? '');
+                array_push($array_tt6, $row['Asunto']     ?? $row['asunto']     ?? '');
+                array_push($array_tt7, $row['Mensaje']    ?? $row['mensaje']    ?? '');
+                array_push($array_tt8, $row['Adjuntos']   ?? $row['adjuntos']   ?? '');
+                array_push($array_tt9, $row['Fecha']      ?? $row['fecha']      ?? '');
+                array_push($array_tt10, $row['Hora']      ?? $row['hora']       ?? '');
+                array_push($array_tt11, $row['Estatus']   ?? $row['estatus']    ?? '');
             }
-            sqlsrv_free_stmt($stmt1);
         }
     }
 }

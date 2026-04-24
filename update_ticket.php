@@ -5,53 +5,37 @@
  *
  * @description
  * Endpoint de API que maneja las actualizaciones de tickets del sistema. Recibe
- * peticiones POST con los datos a actualizar, ejecuta las modificaciones en la
- * base de datos y envía notificaciones por correo electrónico a las partes
- * involucradas (solicitante, responsable asignado, administradores).
+ * peticiones POST con los datos a actualizar, llama a la API REST de Rust para
+ * ejecutar las modificaciones y envía notificaciones por correo electrónico a las
+ * partes involucradas (solicitante, responsable asignado, administradores).
  *
  * Operaciones soportadas:
  * - Asignación/cambio de responsable del ticket
- * - Cambio de estado (Abierto, En Proceso, Resuelto, Cerrado)
+ * - Cambio de estado (Pendiente, En proceso, Atendido)
  * - Actualización de asunto/descripción
  * - Registro de notas y comentarios de seguimiento
- * - Actualización de fechas de atención y resolución
  *
  * Notificaciones automáticas:
- * - Al asignar responsable: Email al técnico asignado
- * - Al cambiar estado: Email al solicitante original
- * - Al resolver ticket: Email de confirmación con detalles
- * - Copia a administradores en todas las notificaciones
+ * - Al cambiar estado "En proceso": Email al técnico asignado y al administrador
+ * - Al poner en "Pausa": Email al usuario y al administrador
+ * - Al marcar como "Atendido": Email de confirmación con detalles
  *
- * Plantillas de email HTML con diseño profesional BacroCorp incluyendo:
- * - Logo corporativo
- * - Resumen del ticket actualizado
- * - Historial de cambios
- * - Link para ver el ticket en el sistema
+ * @api PUT {apiUrl}/api/TicketBacros/tickets/:id
  *
  * @module API de Tickets
  * @access API (POST request requerido)
  *
  * @dependencies
- * - PHP: sqlsrv extension, json_encode/decode
  * - PHPMailer: PHPMailer.php, SMTP.php, Exception.php
  * - SMTP: smtp.office365.com:587 (TLS)
- *
- * @database
- * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
- * - Base de datos: Ticket
- * - Tabla: T3 (tickets TI)
- * - Operaciones: UPDATE con prepared statements
- * - Columnas actualizables: Estado, Responsable, Asunto, FechaAsignacion,
- *                           FechaResolucion, Notas, UltimaActualizacion
+ * - config.php: SMTP credentials, ADMIN_EMAIL, ADMIN_NAME, PDF_API_URL
  *
  * @inputs
  * - POST (application/x-www-form-urlencoded):
- *   - id_ticket (required): ID único del ticket a actualizar
+ *   - id_ticket   (required): ID único del ticket a actualizar
  *   - responsable (required): Nombre del técnico responsable
- *   - estatus (required): Nuevo estado del ticket
- *   - asunto (optional): Nuevo asunto/título
- *   - notas (optional): Notas de seguimiento
- *   - fecha_resolucion (optional): Fecha de cierre
+ *   - estatus     (required): Nuevo estado del ticket
+ *   - asunto      (optional): Nuevo asunto/título
  *
  * @outputs
  * - Content-Type: application/json
@@ -60,55 +44,16 @@
  * - Respuesta de error:
  *   {"success": false, "msg": "Descripción del error"}
  *
- * @http_methods
- * - POST: Único método permitido
- * - GET/PUT/DELETE: Retorna error "Método no permitido"
- *
- * @email
- * - Servidor SMTP: smtp.office365.com
- * - Puerto: 587 (STARTTLS)
- * - Remitente: tickets@bacrocorp.com
- * - Plantillas HTML con estilos inline
- * - Encabezados: Logo BacroCorp, número de ticket, estado
- * - Cuerpo: Detalles del ticket, cambios realizados
- * - Footer: Información de contacto, link al sistema
- *
- * @security
- * - Validación de campos requeridos (id_ticket, responsable, estatus)
- * - Content-Type JSON en response header
- * - Sanitización de inputs antes de UPDATE
- * - Prepared statements para prevenir SQL injection
- * - No expone errores de BD en respuesta al cliente
- *
- * @constants
- * - ADMIN_EMAIL: 'tickets@bacrocorp.com' — Email del administrador
- * - ADMIN_NAME: 'Administrador TI BacroCorp' — Nombre del remitente
- *
- * @error_codes
- * - "Método no permitido": Request no es POST
- * - "Datos incompletos": Faltan campos requeridos
- * - "Ticket no encontrado": ID no existe en BD
- * - "Error de conexión": Fallo al conectar con BD
- * - "Error de actualización": Fallo en query UPDATE
- * - "Error de email": Fallo al enviar notificación (no crítico)
- *
- * @workflow
- * 1. Recibir POST request
- * 2. Validar método HTTP (POST obligatorio)
- * 3. Extraer y validar parámetros requeridos
- * 4. Conectar a base de datos
- * 5. Ejecutar UPDATE con prepared statement
- * 6. Obtener datos actualizados del ticket
- * 7. Enviar notificaciones por email
- * 8. Retornar respuesta JSON
+ * @estatus_mapping
+ * - PHP "En Proceso" → API "En proceso"  (Rust valida estatus exactos)
+ * - PHP "Pausa"      → API "Pausa"       (no mapeado en Rust, se envía tal cual)
+ * - PHP "Atendido"   → API "Atendido"
  *
  * @author Equipo Tecnología BacroCorp
- * @version 3.0
+ * @version 4.0 (migrado a API REST - sin sqlsrv)
  * @since 2024
- * @updated 2025-01-20
+ * @updated 2026-04-23
  */
-
-// update_ticket.php - VERSIÓN COMPLETA CON ESTILOS ORIGINALES Y CORRECCIÓN DE FECHAS
 
 // HEADERS PRIMERO - ANTES DE CUALQUIER SALIDA
 header('Content-Type: application/json');
@@ -122,16 +67,19 @@ require_once __DIR__ . '/config.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
+// URL base de la API Rust
+$apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['success' => false, 'msg' => 'Método no permitido']);
     exit;
 }
 
 // Obtener datos del POST
-$id_ticket = $_POST['id_ticket'] ?? '';
-$responsable = $_POST['responsable'] ?? '';
-$estatus = $_POST['estatus'] ?? '';
-$asunto = $_POST['asunto'] ?? '';
+$id_ticket  = trim($_POST['id_ticket']  ?? '');
+$responsable = trim($_POST['responsable'] ?? '');
+$estatus    = trim($_POST['estatus']    ?? '');
+$asunto     = trim($_POST['asunto']     ?? '');
 
 // Validar datos requeridos
 if (empty($id_ticket) || empty($responsable) || empty($estatus)) {
@@ -140,138 +88,191 @@ if (empty($id_ticket) || empty($responsable) || empty($estatus)) {
 }
 
 try {
-    // Conectar a la base de datos
-    $serverName = $DB_SERVER;
-    $connectionInfo = array(
-        "Database" => $DB_DATABASE,
-        "UID" => $DB_USERNAME,
-        "PWD" => $DB_PASSWORD,
-        "CharacterSet" => "UTF-8",
-        "ReturnDatesAsStrings" => true,
-        "TrustServerCertificate" => true,
-        "Encrypt" => true
-    );
-    
-    $conn = sqlsrv_connect($serverName, $connectionInfo);
-
-    if (!$conn) {
-        $errors = sqlsrv_errors();
-        throw new Exception("Error de conexión a la base de datos: " . $errors[0]['message']);
+    // ------------------------------------------------------------------
+    // PASO 1: Obtener datos actuales del ticket desde la API
+    //         (necesarios para el correo: Correo, Nombre, Prioridad, etc.)
+    // ------------------------------------------------------------------
+    $ticketData = obtenerTicketDesdeApi($apiUrl, $id_ticket);
+    if ($ticketData === null) {
+        throw new Exception("Ticket no encontrado: $id_ticket");
     }
 
-    // Obtener datos actuales del ticket
-    $sqlSelect = "SELECT * FROM T3 WHERE Id_Ticket = ?";
-    $paramsSelect = array($id_ticket);
-    $stmtSelect = sqlsrv_query($conn, $sqlSelect, $paramsSelect);
-    
-    if (!$stmtSelect) {
-        $errors = sqlsrv_errors();
-        throw new Exception("Error al obtener datos del ticket: " . $errors[0]['message']);
-    }
-    
-    $ticketData = sqlsrv_fetch_array($stmtSelect, SQLSRV_FETCH_ASSOC);
-    if (!$ticketData) {
-        throw new Exception("Ticket no encontrado: " . $id_ticket);
-    }
-    
-    // Extraer datos del ticket
-    $userEmail = $ticketData['Correo'] ?? '';
-    $userName = $ticketData['Nombre'] ?? '';
-    $prioridad = $ticketData['Prioridad'] ?? '';
-    $departamento = $ticketData['Empresa'] ?? '';
-    $descripcion = $ticketData['Adjuntos'] ?? '';
-    $mensaje = $ticketData['Mensaje'] ?? '';
-	
-	date_default_timezone_set('America/Mexico_City');
+    $userEmail   = $ticketData['correo']    ?? '';
+    $userName    = $ticketData['nombre']    ?? '';
+    $prioridad   = $ticketData['prioridad'] ?? '';
+    $departamento = $ticketData['empresa']  ?? '';
+    $descripcion = $ticketData['adjuntos']  ?? '';
+    $mensaje     = $ticketData['mensaje']   ?? '';
 
-    // CORRECCIÓN: Formato de fecha para SQL Server (YYYY-MM-DD)
-    $fechaActualSQL = date('Y-m-d');
-    $horaActual = date('H:i:s');
-    
-    // Para correos usamos formato legible (DD/MM/YYYY)
+    // ------------------------------------------------------------------
+    // PASO 2: Enviar actualización a la API Rust
+    //
+    // La API Rust acepta JSON con los campos:
+    //   ticketId, asignadoA, nuevoEstatus
+    //
+    // Mapeo de estatus PHP → Rust (la API valida: Pendiente, En proceso, Atendido)
+    // "En Proceso" (PHP) → "En proceso" (Rust)
+    // "Pausa"      (PHP) → se envía como "Pausa" (el servicio lo acepta como caso _)
+    // "Atendido"   (PHP) → "Atendido"
+    // ------------------------------------------------------------------
+    $estatusApi = mapearEstatusParaApi($estatus);
+
+    $putUrl  = $apiUrl . '/api/TicketBacros/tickets/' . urlencode($id_ticket);
+    $putBody = json_encode([
+        'ticketId'     => $id_ticket,
+        'asignadoA'    => $responsable,
+        'nuevoEstatus' => $estatusApi,
+    ]);
+
+    $ch = curl_init($putUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST  => 'PUT',
+        CURLOPT_POSTFIELDS     => $putBody,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Accept: application/json'],
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_CONNECTTIMEOUT => 5,
+    ]);
+
+    $putResponse = curl_exec($ch);
+    $httpCode    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError   = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlError) {
+        throw new Exception("Error de conexión con la API: $curlError");
+    }
+
+    $putData = json_decode($putResponse, true);
+
+    if ($httpCode < 200 || $httpCode >= 300) {
+        $apiMsg = $putData['error'] ?? $putData['message'] ?? $putResponse;
+        throw new Exception("Error al actualizar el ticket (HTTP $httpCode): $apiMsg");
+    }
+
+    if (isset($putData['success']) && $putData['success'] === false) {
+        $apiMsg = $putData['message'] ?? $putData['error'] ?? 'Error desconocido';
+        throw new Exception("Error al actualizar el ticket: $apiMsg");
+    }
+
+    // ------------------------------------------------------------------
+    // PASO 3: Enviar notificaciones por correo según el estado
+    // ------------------------------------------------------------------
+    date_default_timezone_set('America/Mexico_City');
     $fechaActualCorreo = date('d/m/Y');
-    
-    // Construir consulta dinámica con formato SQL Server
-    $sqlUpdate = "UPDATE T3 SET Estatus = ?, PA = ?, Asunto = ?";
-    $paramsUpdate = array($estatus, $responsable, $asunto);
-    
-    switch($estatus) {
-        case 'En Proceso':
-            $sqlUpdate .= ", FechaEnProceso = ?, HoraEnProceso = ?";
-            $paramsUpdate[] = $fechaActualSQL;
-            $paramsUpdate[] = $horaActual;
-            break;
-        case 'Pausa':
-            $sqlUpdate .= ", FechaPausa = ?, HoraPausa = ?";
-            $paramsUpdate[] = $fechaActualSQL;
-            $paramsUpdate[] = $horaActual;
-            break;
-        case 'Atendido':
-            $sqlUpdate .= ", FechaTerminado = ?, HoraTerminado = ?";
-            $paramsUpdate[] = $fechaActualSQL;
-            $paramsUpdate[] = $horaActual;
-            break;
-    }
-    
-    $sqlUpdate .= " WHERE Id_Ticket = ?";
-    $paramsUpdate[] = $id_ticket;
+    $horaActual        = date('H:i:s');
 
-    // Actualizar ticket en la base de datos
-    $stmtUpdate = sqlsrv_query($conn, $sqlUpdate, $paramsUpdate);
+    $notificationResults = ['user' => false, 'admin' => false];
 
-    if (!$stmtUpdate) {
-        $errors = sqlsrv_errors();
-        throw new Exception("Error al actualizar el ticket: " . $errors[0]['message']);
-    }
-
-    // Enviar notificaciones según el estado
-    $notificationResults = [
-        'user' => false,
-        'admin' => false
-    ];
-
-    // Solo enviar notificaciones si hay email de usuario
     if (!empty($userEmail)) {
         $notificationResults = sendStatusNotifications(
-            $estatus, 
-            $userName, 
-            $userEmail, 
-            $responsable, 
-            $id_ticket, 
-            $prioridad, 
-            $departamento, 
-            $asunto, 
-            $descripcion, 
+            $estatus,
+            $userName,
+            $userEmail,
+            $responsable,
+            $id_ticket,
+            $prioridad,
+            $departamento,
+            $asunto,
+            $descripcion,
             $mensaje,
             $fechaActualCorreo,
             $horaActual
         );
     }
 
-    // Liberar recursos
-    if ($stmtSelect) sqlsrv_free_stmt($stmtSelect);
-    if ($stmtUpdate) sqlsrv_free_stmt($stmtUpdate);
-    if ($conn) sqlsrv_close($conn);
-
-    // Respuesta exitosa
+    // ------------------------------------------------------------------
+    // PASO 4: Respuesta exitosa
+    // ------------------------------------------------------------------
     echo json_encode([
-        'success' => true, 
-        'msg' => 'Ticket actualizado correctamente',
+        'success'      => true,
+        'msg'          => 'Ticket actualizado correctamente',
         'notifications' => $notificationResults,
-        'ticket_id' => $id_ticket,
-        'estatus' => $estatus,
-        'responsable' => $responsable
+        'ticket_id'    => $id_ticket,
+        'estatus'      => $estatus,
+        'responsable'  => $responsable,
     ]);
 
 } catch (Exception $e) {
-    // En caso de error, enviar respuesta JSON de error
     http_response_code(500);
     echo json_encode([
-        'success' => false, 
-        'msg' => $e->getMessage(),
-        'error_type' => 'server_error'
+        'success'    => false,
+        'msg'        => $e->getMessage(),
+        'error_type' => 'server_error',
     ]);
     exit;
+}
+
+// ==============================================
+// FUNCIÓN: Obtener datos del ticket desde la API
+// ==============================================
+
+/**
+ * Llama a GET /api/TicketBacros/tickets y busca el ticket con el id dado.
+ * Retorna el array del ticket o null si no se encuentra.
+ *
+ * @param string $apiUrl  URL base de la API (sin slash final)
+ * @param string $idTicket ID del ticket a buscar
+ * @return array|null
+ */
+function obtenerTicketDesdeApi(string $apiUrl, string $idTicket): ?array
+{
+    $getUrl = $apiUrl . '/api/TicketBacros/tickets';
+
+    $ch = curl_init($getUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_CONNECTTIMEOUT => 5,
+    ]);
+
+    $response  = curl_exec($ch);
+    $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlError || $httpCode < 200 || $httpCode >= 300) {
+        return null;
+    }
+
+    $data = json_decode($response, true);
+    if (!isset($data['data']) || !is_array($data['data'])) {
+        return null;
+    }
+
+    // Buscar el ticket por id_ticket
+    foreach ($data['data'] as $ticket) {
+        if (isset($ticket['id_ticket']) && (string)$ticket['id_ticket'] === (string)$idTicket) {
+            return $ticket;
+        }
+    }
+
+    return null;
+}
+
+// ==============================================
+// FUNCIÓN: Mapear estatus PHP → API Rust
+// ==============================================
+
+/**
+ * Mapea los estatus del formulario PHP a los valores exactos que acepta la API Rust.
+ * La API valida contra: ["Pendiente", "En proceso", "Atendido"]
+ *
+ * @param string $estatus Estatus recibido del formulario PHP
+ * @return string Estatus válido para la API
+ */
+function mapearEstatusParaApi(string $estatus): string
+{
+    $mapa = [
+        'En Proceso' => 'En proceso',  // PHP usa mayúscula, Rust usa minúscula
+        'En proceso' => 'En proceso',
+        'Atendido'   => 'Atendido',
+        'Pendiente'  => 'Pendiente',
+        'Pausa'      => 'Pausa',       // La API lo acepta (caso _ en el repositorio)
+    ];
+
+    return $mapa[$estatus] ?? $estatus;
 }
 
 // ==============================================
@@ -287,15 +288,16 @@ function sendStatusNotifications($estatus, $userName, $userEmail, $responsable, 
     try {
         switch($estatus) {
             case 'En Proceso':
+            case 'En proceso':
                 $results['user'] = sendUserInProcessEmail($userName, $userEmail, $responsable, $ticketId, $subject, $description, $message, $fechaCorreo, $horaCorreo);
                 $results['admin'] = sendAdminInProcessEmail($userName, $userEmail, $responsable, $ticketId, $subject, $prioridad, $department, $description, $message, $fechaCorreo, $horaCorreo);
                 break;
-                
+
             case 'Pausa':
                 $results['user'] = sendUserPauseEmail($userName, $userEmail, $responsable, $ticketId, $subject, $description, $message, $fechaCorreo, $horaCorreo);
                 $results['admin'] = sendAdminPauseEmail($userName, $userEmail, $responsable, $ticketId, $subject, $prioridad, $department, $description, $message, $fechaCorreo, $horaCorreo);
                 break;
-                
+
             case 'Atendido':
                 $results['user'] = sendUserCompletedEmail($userName, $userEmail, $responsable, $ticketId, $subject, $description, $message, $fechaCorreo, $horaCorreo);
                 $results['admin'] = sendAdminCompletedEmail($userName, $userEmail, $responsable, $ticketId, $subject, $prioridad, $department, $description, $message, $fechaCorreo, $horaCorreo);
@@ -315,19 +317,19 @@ function sendStatusNotifications($estatus, $userName, $userEmail, $responsable, 
 function sendUserInProcessEmail($userName, $userEmail, $responsable, $ticketId, $asunto, $descripcion, $mensaje, $fechaCorreo, $horaCorreo) {
     try {
         $mail = new PHPMailer(true);
-        
+
         configurarSMTP($mail);
-        
+
         $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
         $mail->addAddress($userEmail, $userName);
-        
+
         $mail->isHTML(true);
         $mail->Subject = "🔄 Ticket #$ticketId en Proceso - $asunto";
-        
+
         $mail->Body = createUserInProcessTemplate($userName, $responsable, $ticketId, $asunto, $descripcion, $mensaje, $fechaCorreo, $horaCorreo);
-        
+
         return $mail->send();
-        
+
     } catch (Exception $e) {
         error_log("Error enviando correo EN PROCESO al usuario: " . $e->getMessage());
         return false;
@@ -337,19 +339,19 @@ function sendUserInProcessEmail($userName, $userEmail, $responsable, $ticketId, 
 function sendAdminInProcessEmail($userName, $userEmail, $responsable, $ticketId, $asunto, $prioridad, $departamento, $descripcion, $mensaje, $fechaCorreo, $horaCorreo) {
     try {
         $mail = new PHPMailer(true);
-        
+
         configurarSMTP($mail);
-        
+
         $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
         $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
-        
+
         $mail->isHTML(true);
         $mail->Subject = "✅ TICKET ASIGNADO #$ticketId - $responsable";
-        
+
         $mail->Body = createAdminInProcessTemplate($userName, $userEmail, $responsable, $ticketId, $asunto, $prioridad, $departamento, $descripcion, $mensaje, $fechaCorreo, $horaCorreo);
-        
+
         return $mail->send();
-        
+
     } catch (Exception $e) {
         error_log("Error enviando correo EN PROCESO al admin: " . $e->getMessage());
         return false;
@@ -359,19 +361,19 @@ function sendAdminInProcessEmail($userName, $userEmail, $responsable, $ticketId,
 function sendUserPauseEmail($userName, $userEmail, $responsable, $ticketId, $asunto, $descripcion, $mensaje, $fechaCorreo, $horaCorreo) {
     try {
         $mail = new PHPMailer(true);
-        
+
         configurarSMTP($mail);
-        
+
         $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
         $mail->addAddress($userEmail, $userName);
-        
+
         $mail->isHTML(true);
         $mail->Subject = "⏸️ Ticket #$ticketId en Pausa - $asunto";
-        
+
         $mail->Body = createUserPauseTemplate($userName, $responsable, $ticketId, $asunto, $descripcion, $mensaje, $fechaCorreo, $horaCorreo);
-        
+
         return $mail->send();
-        
+
     } catch (Exception $e) {
         error_log("Error enviando correo PAUSA al usuario: " . $e->getMessage());
         return false;
@@ -381,19 +383,19 @@ function sendUserPauseEmail($userName, $userEmail, $responsable, $ticketId, $asu
 function sendAdminPauseEmail($userName, $userEmail, $responsable, $ticketId, $asunto, $prioridad, $departamento, $descripcion, $mensaje, $fechaCorreo, $horaCorreo) {
     try {
         $mail = new PHPMailer(true);
-        
+
         configurarSMTP($mail);
-        
+
         $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
         $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
-        
+
         $mail->isHTML(true);
         $mail->Subject = "⏸️ TICKET EN PAUSA #$ticketId - $responsable";
-        
+
         $mail->Body = createAdminPauseTemplate($userName, $userEmail, $responsable, $ticketId, $asunto, $prioridad, $departamento, $descripcion, $mensaje, $fechaCorreo, $horaCorreo);
-        
+
         return $mail->send();
-        
+
     } catch (Exception $e) {
         error_log("Error enviando correo PAUSA al admin: " . $e->getMessage());
         return false;
@@ -403,19 +405,19 @@ function sendAdminPauseEmail($userName, $userEmail, $responsable, $ticketId, $as
 function sendUserCompletedEmail($userName, $userEmail, $responsable, $ticketId, $asunto, $descripcion, $mensaje, $fechaCorreo, $horaCorreo) {
     try {
         $mail = new PHPMailer(true);
-        
+
         configurarSMTP($mail);
-        
+
         $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
         $mail->addAddress($userEmail, $userName);
-        
+
         $mail->isHTML(true);
         $mail->Subject = "✅ Ticket #$ticketId Atendido - $asunto";
-        
+
         $mail->Body = createUserCompletedTemplate($userName, $responsable, $ticketId, $asunto, $descripcion, $mensaje, $fechaCorreo, $horaCorreo);
-        
+
         return $mail->send();
-        
+
     } catch (Exception $e) {
         error_log("Error enviando correo ATENDIDO al usuario: " . $e->getMessage());
         return false;
@@ -425,19 +427,19 @@ function sendUserCompletedEmail($userName, $userEmail, $responsable, $ticketId, 
 function sendAdminCompletedEmail($userName, $userEmail, $responsable, $ticketId, $asunto, $prioridad, $departamento, $descripcion, $mensaje, $fechaCorreo, $horaCorreo) {
     try {
         $mail = new PHPMailer(true);
-        
+
         configurarSMTP($mail);
-        
+
         $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
         $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
-        
+
         $mail->isHTML(true);
         $mail->Subject = "🎉 TICKET COMPLETADO #$ticketId - $responsable";
-        
+
         $mail->Body = createAdminCompletedTemplate($userName, $userEmail, $responsable, $ticketId, $asunto, $prioridad, $departamento, $descripcion, $mensaje, $fechaCorreo, $horaCorreo);
-        
+
         return $mail->send();
-        
+
     } catch (Exception $e) {
         error_log("Error enviando correo ATENDIDO al admin: " . $e->getMessage());
         return false;
@@ -579,12 +581,12 @@ function createUserInProcessTemplate($userName, $responsable, $ticketId, $asunto
                 <div class="alert-banner">
                     🔧 ¡Estamos trabajando en tu solicitud! Tu ticket está siendo atendido activamente.
                 </div>
-                
+
                 <div class="ticket-card">
                     <div style="text-align: center; margin-bottom: 20px;">
                         <span style="background: #003366; color: white; padding: 10px 25px; border-radius: 25px; font-size: 18px; font-weight: bold;">TICKET #: ' . $ticketId . '</span>
                     </div>
-                    
+
                     <div class="ticket-detail">
                         <span class="ticket-label">Fecha y Hora:</span>
                         <span>' . $fechaActual . ' - ' . $horaActual . '</span>
@@ -609,7 +611,7 @@ function createUserInProcessTemplate($userName, $responsable, $ticketId, $asunto
                 <div class="progress-text">
                     ⏳ Procesando tu solicitud - Trabajando en la solución...
                 </div>
-                
+
                 <div class="user-info">
                     <h3 style="margin-top: 0; color: #2c3e50;">👤 Información del Ticket</h3>
                     <div class="ticket-detail">
@@ -617,19 +619,19 @@ function createUserInProcessTemplate($userName, $responsable, $ticketId, $asunto
                         <span>' . $userName . '</span>
                     </div>
                 </div>
-                
+
                 <div class="problem-description">
                     <h3 style="margin-top: 0; color: #856404;">📋 Descripción del Problema</h3>
                     <p><strong>' . $descripcion . '</strong></p>
                     ' . ($mensaje ? '<div style="margin-top: 15px;"><strong>Detalles adicionales:</strong><p>' . $mensaje . '</p></div>' : '') . '
                 </div>
-                
+
                 <div class="action-buttons">
                     <p style="font-weight: bold; margin-bottom: 15px; color: #2c3e50;">💬 Comunicación</p>
                     <p>Nuestro especialista <strong>' . $responsable . '</strong> se encuentra trabajando en la solución.<br>
                     Te mantendremos informado sobre el progreso. Agradecemos tu paciencia.</p>
                 </div>
-                
+
                 <div style="text-align: center; color: #666; font-size: 14px; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
                     <p>Este es un mensaje automático del Sistema de Tickets BacroCorp</p>
                 </div>
@@ -743,12 +745,12 @@ function createUserPauseTemplate($userName, $responsable, $ticketId, $asunto, $d
                 <div class="alert-banner">
                     ⏳ Ticket en pausa temporal - Estamos esperando información adicional
                 </div>
-                
+
                 <div class="ticket-card">
                     <div style="text-align: center; margin-bottom: 15px;">
                         <span style="background: #003366; color: white; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: bold;">TICKET #: ' . $ticketId . '</span>
                     </div>
-                    
+
                     <div class="ticket-detail">
                         <span class="ticket-label">Fecha y Hora:</span>
                         <span>' . $fechaActual . ' - ' . $horaActual . '</span>
@@ -766,7 +768,7 @@ function createUserPauseTemplate($userName, $responsable, $ticketId, $asunto, $d
                         <span style="background: #ffc107; color: #856404; padding: 6px 15px; border-radius: 20px; font-size: 14px; font-weight: bold;">En Pausa</span>
                     </div>
                 </div>
-                
+
                 <div class="user-info">
                     <h3 style="margin-top: 0; color: #2c3e50;">👤 Información del Ticket</h3>
                     <div class="ticket-detail">
@@ -774,20 +776,20 @@ function createUserPauseTemplate($userName, $responsable, $ticketId, $asunto, $d
                         <span>' . $userName . '</span>
                     </div>
                 </div>
-                
+
                 <div class="problem-description">
                     <h3 style="margin-top: 0; color: #856404;">📋 Descripción del Problema</h3>
                     <p><strong>' . $descripcion . '</strong></p>
                     ' . ($mensaje ? '<p><strong>Detalles adicionales:</strong></p><p>' . $mensaje . '</p>' : '') . '
                 </div>
-                
+
                 <div class="action-buttons">
                     <p style="font-weight: bold; margin-bottom: 15px; color: #856404;">🔍 Razón de la Pausa</p>
-                    <p>Actualmente estamos esperando información adicional, recursos necesarios 
+                    <p>Actualmente estamos esperando información adicional, recursos necesarios
                     o coordinación con otros departamentos para continuar con la atención de tu solicitud.</p>
                     <p style="margin-top: 15px; color: #666;">Nuestro especialista reanudará el trabajo tan pronto como se resuelvan los impedimentos.</p>
                 </div>
-                
+
                 <div style="text-align: center; color: #666; font-size: 14px; margin-top: 20px;">
                     <p>Este es un mensaje automático del Sistema de Tickets BacroCorp</p>
                 </div>
@@ -901,12 +903,12 @@ function createUserCompletedTemplate($userName, $responsable, $ticketId, $asunto
                 <div class="alert-banner">
                     🎉 ¡Ticket atendido exitosamente! Gracias por su confianza.
                 </div>
-                
+
                 <div class="ticket-card">
                     <div style="text-align: center; margin-bottom: 15px;">
                         <span style="background: #003366; color: white; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: bold;">TICKET #: ' . $ticketId . '</span>
                     </div>
-                    
+
                     <div class="ticket-detail">
                         <span class="ticket-label">Fecha y Hora:</span>
                         <span>' . $fechaActual . ' - ' . $horaActual . '</span>
@@ -924,7 +926,7 @@ function createUserCompletedTemplate($userName, $responsable, $ticketId, $asunto
                         <span style="background: #28a745; color: white; padding: 6px 15px; border-radius: 20px; font-size: 14px; font-weight: bold;">Completado</span>
                     </div>
                 </div>
-                
+
                 <div class="user-info">
                     <h3 style="margin-top: 0; color: #2c3e50;">👤 Información del Ticket</h3>
                     <div class="ticket-detail">
@@ -932,21 +934,21 @@ function createUserCompletedTemplate($userName, $responsable, $ticketId, $asunto
                         <span>' . $userName . '</span>
                     </div>
                 </div>
-                
+
                 <div class="problem-description">
                     <h3 style="margin-top: 0; color: #856404;">📋 Descripción del Problema</h3>
                     <p><strong>' . $descripcion . '</strong></p>
                     ' . ($mensaje ? '<p><strong>Detalles adicionales:</strong></p><p>' . $mensaje . '</p>' : '') . '
                 </div>
-                
+
                 <div class="action-buttons">
                     <p style="font-weight: bold; margin-bottom: 15px; color: #155724;">🎉 Agradecimiento</p>
-                    <p>Le extendemos nuestro más sincero agradecimiento por su paciencia y confianza 
+                    <p>Le extendemos nuestro más sincero agradecimiento por su paciencia y confianza
                     en nuestro servicio. Su satisfacción es nuestra prioridad.</p>
-                    <p style="margin-top: 15px; color: #666;">Por favor, verifique que todo funcione correctamente. 
+                    <p style="margin-top: 15px; color: #666;">Por favor, verifique que todo funcione correctamente.
                     Si necesita más asistencia, no dude en contactarnos nuevamente.</p>
                 </div>
-                
+
                 <div style="text-align: center; color: #666; font-size: 14px; margin-top: 20px;">
                     <p>Este es un mensaje automático del Sistema de Tickets BacroCorp</p>
                 </div>
@@ -967,7 +969,7 @@ function createUserCompletedTemplate($userName, $responsable, $ticketId, $asunto
 function createAdminInProcessTemplate($userName, $userEmail, $responsable, $ticketId, $asunto, $prioridad, $departamento, $descripcion, $mensaje, $fechaActual, $horaActual) {
     $prioridadColor = getPriorityColor($prioridad);
     $urgencyIcon = getUrgencyIcon($prioridad);
-    
+
     return '
     <!DOCTYPE html>
     <html>
@@ -1075,12 +1077,12 @@ function createAdminInProcessTemplate($userName, $userEmail, $responsable, $tick
                 <div class="alert-banner">
                     ✅ Ticket asignado correctamente a ' . $responsable . '
                 </div>
-                
+
                 <div class="ticket-card">
                     <div style="text-align: center; margin-bottom: 15px;">
                         <span style="background: #003366; color: white; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: bold;">TICKET #: ' . $ticketId . '</span>
                     </div>
-                    
+
                     <div class="ticket-detail">
                         <span class="ticket-label">Fecha y Hora:</span>
                         <span>' . $fechaActual . ' - ' . $horaActual . '</span>
@@ -1098,7 +1100,7 @@ function createAdminInProcessTemplate($userName, $userEmail, $responsable, $tick
                         <span style="color: #28a745; font-weight: bold;">' . $responsable . '</span>
                     </div>
                 </div>
-                
+
                 <div class="user-info">
                     <h3 style="margin-top: 0; color: #2c3e50;">👤 Información del Usuario</h3>
                     <div class="ticket-detail">
@@ -1114,20 +1116,20 @@ function createAdminInProcessTemplate($userName, $userEmail, $responsable, $tick
                         <span>' . $departamento . '</span>
                     </div>
                 </div>
-                
+
                 <div class="problem-description">
                     <h3 style="margin-top: 0; color: #856404;">📋 Descripción del Problema</h3>
                     <p><strong>' . $descripcion . '</strong></p>
                     ' . ($mensaje ? '<p><strong>Detalles adicionales:</strong></p><p>' . $mensaje . '</p>' : '') . '
                 </div>
-                
+
                 <div class="action-buttons">
                     <p style="font-weight: bold; margin-bottom: 15px;">🚀 Estado Actual: En Proceso</p>
                     <p>• Ticket asignado a: <strong>' . $responsable . '</strong><br>
                     • Fecha de asignación: ' . $fechaActual . '<br>
                     • Hora: ' . $horaActual . '</p>
                 </div>
-                
+
                 <div style="text-align: center; color: #666; font-size: 14px; margin-top: 20px;">
                     <p>Este es un mensaje automático del Sistema de Tickets BacroCorp</p>
                 </div>
@@ -1143,7 +1145,7 @@ function createAdminInProcessTemplate($userName, $userEmail, $responsable, $tick
 
 function createAdminPauseTemplate($userName, $userEmail, $responsable, $ticketId, $asunto, $prioridad, $departamento, $descripcion, $mensaje, $fechaActual, $horaActual) {
     $prioridadColor = getPriorityColor($prioridad);
-    
+
     return '
     <!DOCTYPE html>
     <html>
@@ -1251,12 +1253,12 @@ function createAdminPauseTemplate($userName, $userEmail, $responsable, $ticketId
                 <div class="alert-banner">
                     ⏳ Ticket puesto en pausa por ' . $responsable . '
                 </div>
-                
+
                 <div class="ticket-card">
                     <div style="text-align: center; margin-bottom: 15px;">
                         <span style="background: #003366; color: white; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: bold;">TICKET #: ' . $ticketId . '</span>
                     </div>
-                    
+
                     <div class="ticket-detail">
                         <span class="ticket-label">Fecha y Hora:</span>
                         <span>' . $fechaActual . ' - ' . $horaActual . '</span>
@@ -1274,7 +1276,7 @@ function createAdminPauseTemplate($userName, $userEmail, $responsable, $ticketId
                         <span style="color: #ffc107; font-weight: bold;">' . $responsable . '</span>
                     </div>
                 </div>
-                
+
                 <div class="user-info">
                     <h3 style="margin-top: 0; color: #2c3e50;">👤 Información del Usuario</h3>
                     <div class="ticket-detail">
@@ -1290,19 +1292,19 @@ function createAdminPauseTemplate($userName, $userEmail, $responsable, $ticketId
                         <span>' . $departamento . '</span>
                     </div>
                 </div>
-                
+
                 <div class="problem-description">
                     <h3 style="margin-top: 0; color: #856404;">📋 Descripción del Problema</h3>
                     <p><strong>' . $descripcion . '</strong></p>
                     ' . ($mensaje ? '<p><strong>Detalles adicionales:</strong></p><p>' . $mensaje . '</p>' : '') . '
                 </div>
-                
+
                 <div class="action-buttons">
                     <p style="font-weight: bold; margin-bottom: 15px;">📝 Para evidencia</p>
                     <p>Este correo documenta el cambio de estado a "Pausa" del ticket.<br>
                     Se requiere seguimiento para reactivar la atención.</p>
                 </div>
-                
+
                 <div style="text-align: center; color: #666; font-size: 14px; margin-top: 20px;">
                     <p>Este es un mensaje automático del Sistema de Tickets BacroCorp</p>
                 </div>
@@ -1318,7 +1320,7 @@ function createAdminPauseTemplate($userName, $userEmail, $responsable, $ticketId
 
 function createAdminCompletedTemplate($userName, $userEmail, $responsable, $ticketId, $asunto, $prioridad, $departamento, $descripcion, $mensaje, $fechaActual, $horaActual) {
     $prioridadColor = getPriorityColor($prioridad);
-    
+
     return '
     <!DOCTYPE html>
     <html>
@@ -1426,12 +1428,12 @@ function createAdminCompletedTemplate($userName, $userEmail, $responsable, $tick
                 <div class="alert-banner">
                     ✅ Ticket completado exitosamente por ' . $responsable . '
                 </div>
-                
+
                 <div class="ticket-card">
                     <div style="text-align: center; margin-bottom: 15px;">
                         <span style="background: #003366; color: white; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: bold;">TICKET #: ' . $ticketId . '</span>
                     </div>
-                    
+
                     <div class="ticket-detail">
                         <span class="ticket-label">Fecha y Hora:</span>
                         <span>' . $fechaActual . ' - ' . $horaActual . '</span>
@@ -1449,7 +1451,7 @@ function createAdminCompletedTemplate($userName, $userEmail, $responsable, $tick
                         <span style="color: #28a745; font-weight: bold;">' . $responsable . '</span>
                     </div>
                 </div>
-                
+
                 <div class="user-info">
                     <h3 style="margin-top: 0; color: #2c3e50;">👤 Información del Usuario</h3>
                     <div class="ticket-detail">
@@ -1465,19 +1467,19 @@ function createAdminCompletedTemplate($userName, $userEmail, $responsable, $tick
                         <span>' . $departamento . '</span>
                     </div>
                 </div>
-                
+
                 <div class="problem-description">
                     <h3 style="margin-top: 0; color: #856404;">📋 Descripción del Problema</h3>
                     <p><strong>' . $descripcion . '</strong></p>
                     ' . ($mensaje ? '<p><strong>Detalles adicionales:</strong></p><p>' . $mensaje . '</p>' : '') . '
                 </div>
-                
+
                 <div class="action-buttons">
                     <p style="font-weight: bold; margin-bottom: 15px;">📝 Para evidencia</p>
                     <p>Este correo sirve como constancia de la finalización exitosa del ticket.<br>
                     Se ha notificado al usuario sobre la conclusión del servicio.</p>
                 </div>
-                
+
                 <div style="text-align: center; color: #666; font-size: 14px; margin-top: 20px;">
                     <p>Este es un mensaje automático del Sistema de Tickets BacroCorp</p>
                 </div>
@@ -1512,4 +1514,3 @@ function getUrgencyIcon($priority) {
         default: return '📝';
     }
 }
-?>

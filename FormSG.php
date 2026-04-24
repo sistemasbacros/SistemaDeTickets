@@ -8,42 +8,62 @@
  * Permite a los usuarios reportar solicitudes de mantenimiento, limpieza,
  * reparaciones y otros servicios generales de la empresa.
  *
- * Este formulario es similar en estructura a FormTic.php pero está
- * orientado a solicitudes de servicios no relacionados con TI.
+ * Migrado de conexión directa a SQL Server a consumo de API REST:
+ *   - POST /api/TicketBacros/tickets-sg  →  crear ticket SG
+ *   - GET  /api/TicketBacros/personal    →  lista de nombres para el selector
  *
- * Características:
- * - Diseño limpio con gradiente gris claro
- * - Tipografía Inter de Google Fonts
- * - Sin autenticación requerida
- * - Campos específicos para servicios generales
- * - Fondo posicionable para logo corporativo
- *
- * Tipos de solicitudes típicas:
- * - Mantenimiento de instalaciones
- * - Limpieza de áreas
- * - Reparaciones menores
- * - Solicitudes de mobiliario
- * - Servicios de jardinería
+ * NOTA: El origen de datos del selector de nombres se cambió de
+ * [BASENUEVA].[dbo].[vwLBSContactList] (Comercial) a la tabla [conped]
+ * (base de datos Ticket), expuesta por el endpoint /api/TicketBacros/personal.
+ * Si se requiere volver a usar vwLBSContactList, será necesario agregar un
+ * endpoint dedicado en el backend Rust.
  *
  * @module Módulo de Servicios Generales
  * @access Público (sin autenticación)
  *
  * @dependencies
- * - CSS CDN: Google Fonts (Inter)
- * - Backend: procesa datos a tabla TicketsSG
+ *   - CSS CDN: Google Fonts (Inter), SweetAlert2
+ *   - Backend: API Rust (puerto 3000)
  *
  * @database
- * - Tabla destino: TicketsSG (diferente a T3 de TI)
- *
- * @ui_components
- * - Container blanco centrado
- * - Campos de formulario estándar
- * - Botón de envío
+ *   - Tabla destino: TicketsSG (via API)
  *
  * @author Equipo Tecnología BacroCorp
- * @version 1.0
+ * @version 2.0
  * @since 2024
  */
+
+require_once __DIR__ . '/config.php';
+
+/**
+ * Determina la URL base de la API Rust.
+ *
+ * Prioridad:
+ *   1. Variable de entorno API_URL
+ *   2. Clave API_URL en el archivo .env
+ *   3. host.docker.internal:3000  (dentro de contenedores Docker)
+ *   4. localhost:3000              (entorno local sin Docker)
+ */
+function getApiUrl(): string
+{
+    // 1. Variable de entorno ya cargada
+    $fromEnv = getenv('API_URL');
+    if ($fromEnv) {
+        return rtrim($fromEnv, '/');
+    }
+
+    // 2. Fallback: detectar si estamos en Docker (host.docker.internal resolvible)
+    //    En producción se espera que API_URL esté definida en el .env.
+    $dockerHost = 'host.docker.internal';
+    // phpcs:ignore
+    $resolved = @file_get_contents("http://{$dockerHost}:3000/health");
+    if ($resolved !== false) {
+        return "http://{$dockerHost}:3000";
+    }
+
+    // 3. Localhost para entornos locales sin Docker
+    return 'http://localhost:3000';
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -54,6 +74,8 @@
 
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <!-- SweetAlert2 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
 
   <style>
     * {
@@ -70,7 +92,7 @@
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
-      position: relative; /* Necesario para que el logo se posicione de manera absoluta */
+      position: relative;
     }
 
     .container {
@@ -179,6 +201,12 @@
       transform: translateY(-2px);
     }
 
+    button[type="submit"]:disabled {
+      background: #999;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     @media (max-width: 640px) {
       .container {
         padding: 25px 20px;
@@ -188,47 +216,57 @@
         font-size: 2rem;
       }
     }
-	
-	
 
-/* Botón flotante - esquina superior izquierda */
-#homeButton {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  width: 56px;
-  height: 56px;
-  background-color: #0033cc; /* azul fuerte */
-  color: #ffffff; /* blanco */
-  border: none;
-  border-radius: 50%;
-  font-size: 24px;
-  cursor: pointer;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-  z-index: 1000;
-}
+    /* Botón flotante - esquina superior izquierda */
+    #homeButton {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 56px;
+      height: 56px;
+      background-color: #0033cc;
+      color: #ffffff;
+      border: none;
+      border-radius: 50%;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
 
-/* Hover animación */
-#homeButton:hover {
-  background-color: #0022aa;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
-}
+    #homeButton:hover {
+      background-color: #0022aa;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Indicador de carga del selector de nombres */
+    .select-loading {
+      font-size: 0.85rem;
+      color: #888;
+      margin-top: 4px;
+      display: none;
+    }
+
+    .select-loading.visible {
+      display: block;
+    }
   </style>
 </head>
 <body>
- <button id="homeButton" title="Inicio">🏠</button>
+  <button id="homeButton" title="Inicio">&#x1F3E0;</button>
   <h2>SERVICIOS GENERALES</h2>
   <img src="Logo2.png" alt="Logo" class="logo" />
-  
 
   <div class="container">
-    <form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]);?>">
+    <form id="sgForm">
       <div class="form-group">
         <label for="Nombre">Nombre</label>
-	     <select id="Nombre" name="Nombre" required>
+        <select id="Nombre" name="Nombre" required>
+          <option value="" disabled selected>Cargando lista...</option>
         </select>
+        <span class="select-loading" id="loadingMsg">Cargando personal...</span>
       </div>
 
       <div class="form-group">
@@ -242,22 +280,21 @@
 
       <div class="form-group">
         <label for="empre">Ubicación</label>
-	     <select id="empre" name="empre" required>
+        <select id="empre" name="empre" required>
           <option value="PRIMERO">PRIMER PISO</option>
           <option value="SEGUNDO">SEGUNDO PISO</option>
-		  <option value="TERCER">TERCER PISO</option>
+          <option value="TERCER">TERCER PISO</option>
           <option value="CASA">CASA</option>
-		  <option value="PATIO">PATIO</option>
-		  <option value="VIGILANCIA">VIGILANCIA</option>
-        </select>	
-		
+          <option value="PATIO">PATIO</option>
+          <option value="VIGILANCIA">VIGILANCIA</option>
+        </select>
       </div>
 
       <div class="form-group">
         <label for="Asunto">Tipo</label>
         <select id="Asunto" name="Asunto" required>
           <option value="MANTENIMIENTO_GENERAL">MANTENIMIENTO EDIFICIO</option>
-		   <option value="INTENDENDCIA">INTENDENDCIA</option>
+          <option value="INTENDENDCIA">INTENDENDCIA</option>
           <option value="OTROS">OTROS</option>
         </select>
       </div>
@@ -287,126 +324,226 @@
         <input type="text" id="tik" name="tik" required readonly />
       </div>
 
-      <button type="submit">Solicitar</button>
+      <button type="submit" id="submitBtn">Solicitar</button>
     </form>
   </div>
 
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
   <script>
-  
-  document.getElementById("homeButton").addEventListener("click", function() {
-  // Reemplaza "index.html" con la ruta a tu página de inicio
-  window.location.href = "MenSG.php";
-});
-    // Fecha y hora automáticas
+    // ──────────────────────────────────────────────────────────────
+    // URL base de la API — debe coincidir con la URL del backend Rust.
+    // En producción se puede definir la variable de entorno API_URL.
+    // ──────────────────────────────────────────────────────────────
+    const API_URL = <?php echo json_encode(getApiUrl()); ?>;
+
+    // ── Navegación ────────────────────────────────────────────────
+    document.getElementById('homeButton').addEventListener('click', function () {
+      window.location.href = 'MenSG.php';
+    });
+
+    // ── Fecha y hora automáticas ──────────────────────────────────
     function pad(n) { return n < 10 ? '0' + n : n; }
+
     function updateDateTime() {
       const now = new Date();
-	
-	const formattedDate = now.toLocaleDateString('es-ES', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit'
-}).split('/').reverse().join('-');
-	
+      // Formato YYYY-MM-DD (consistente con el backend)
+      const formattedDate = now.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).split('/').reverse().join('-');
+
       document.getElementById('fecha').value = formattedDate;
-      document.getElementById('Hora').value = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+      document.getElementById('Hora').value =
+        pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
     }
+
     updateDateTime();
     setInterval(updateDateTime, 1000);
 
-    // Generar ID
+    // ── Generar ID de ticket ──────────────────────────────────────
     function generateTicketID() {
       const ticket = document.getElementById('tik');
       if (!ticket.value) {
         ticket.value = 'TI-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
       }
     }
-    generateTicketID();
-  </script>
 
+    generateTicketID();
+
+    // ── Cargar lista de personal desde la API ─────────────────────
+    // Fuente: GET /api/TicketBacros/personal  (tabla conped, BD Ticket)
+    // Nota: el origen original era [BASENUEVA].[dbo].[vwLBSContactList]
+    // (BD Comercial). Si se necesita ese origen, hay que agregar un
+    // endpoint dedicado en el backend Rust.
+    async function cargarPersonal() {
+      const select = document.getElementById('Nombre');
+      const loadingMsg = document.getElementById('loadingMsg');
+
+      loadingMsg.classList.add('visible');
+
+      try {
+        const response = await fetch(API_URL + '/api/TicketBacros/personal');
+
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status);
+        }
+
+        const result = await response.json();
+
+        // Limpiar opciones previas
+        select.innerHTML = '';
+
+        // Opción por defecto vacía
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = '-- Selecciona tu nombre --';
+        defaultOpt.disabled = true;
+        defaultOpt.selected = true;
+        select.appendChild(defaultOpt);
+
+        if (!result.data || result.data.length === 0) {
+          const emptyOpt = document.createElement('option');
+          emptyOpt.value = '';
+          emptyOpt.textContent = 'No hay personal registrado';
+          emptyOpt.disabled = true;
+          select.appendChild(emptyOpt);
+          return;
+        }
+
+        result.data.forEach(function (persona) {
+          const option = document.createElement('option');
+          // El valor usa el nombre completo en minúsculas con guiones bajos
+          // para mantener compatibilidad con el comportamiento original.
+          option.value = persona.nombre.toLowerCase().replace(/\s+/g, '_');
+          option.textContent = persona.nombre;
+          select.appendChild(option);
+        });
+
+      } catch (err) {
+        console.error('Error cargando personal:', err);
+        select.innerHTML = '';
+        const errorOpt = document.createElement('option');
+        errorOpt.value = '';
+        errorOpt.textContent = 'Error cargando lista';
+        errorOpt.disabled = true;
+        errorOpt.selected = true;
+        select.appendChild(errorOpt);
+
+        Swal.fire({
+          icon: 'warning',
+          title: 'Aviso',
+          text: 'No se pudo cargar la lista de personal. Verifique la conexión con el servidor.',
+          confirmButtonColor: '#003366',
+          confirmButtonText: 'Entendido'
+        });
+      } finally {
+        loadingMsg.classList.remove('visible');
+      }
+    }
+
+    cargarPersonal();
+
+    // ── Enviar formulario a la API ─────────────────────────────────
+    document.getElementById('sgForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const submitBtn = document.getElementById('submitBtn');
+
+      // Validar que se seleccionó un nombre real
+      const nombreSelect = document.getElementById('Nombre');
+      if (!nombreSelect.value) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Campo requerido',
+          text: 'Por favor selecciona tu nombre de la lista.',
+          confirmButtonColor: '#003366',
+          confirmButtonText: 'Entendido'
+        });
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Enviando...';
+
+      // Obtener el texto visible del selector (nombre completo)
+      const nombreTexto = nombreSelect.options[nombreSelect.selectedIndex].textContent;
+
+      const payload = {
+        Nombre:    nombreTexto,
+        Prioridad: document.getElementById('prio').value,
+        Empresa:   document.getElementById('empre').value,
+        Asunto:    document.getElementById('Asunto').value,
+        Adjuntos:  document.getElementById('adj').value,
+        Mensaje:   document.getElementById('men').value,
+        Fecha:     document.getElementById('fecha').value,
+        Hora:      document.getElementById('Hora').value,
+        Id_Ticket: document.getElementById('tik').value
+      };
+
+      try {
+        const response = await fetch(API_URL + '/api/TicketBacros/tickets-sg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          Swal.fire({
+            icon: 'success',
+            title: 'Ticket Creado',
+            html:
+              '<div style="text-align:center;padding:10px">' +
+              '<p style="font-size:1rem;margin-bottom:12px">Se levant&oacute; correctamente tu ticket</p>' +
+              '<span style="background:#003366;color:#fff;padding:8px 18px;border-radius:20px;font-size:1.1rem;font-weight:bold;">' +
+              escapeHtml(payload.Id_Ticket) +
+              '</span>' +
+              '</div>',
+            confirmButtonColor: '#003366',
+            confirmButtonText: 'Volver al Inicio',
+            allowOutsideClick: false
+          }).then(function () {
+            window.location.href = 'MenSG.php';
+          });
+        } else {
+          const errorMsg = result.message || 'Error desconocido del servidor.';
+          Swal.fire({
+            icon: 'error',
+            title: 'Error al crear el ticket',
+            text: errorMsg,
+            confirmButtonColor: '#003366',
+            confirmButtonText: 'Entendido'
+          });
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Solicitar';
+        }
+
+      } catch (err) {
+        console.error('Error enviando ticket SG:', err);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error de conexión',
+          text: 'No se pudo comunicar con el servidor. Verifique su conexión e intente nuevamente.',
+          confirmButtonColor: '#003366',
+          confirmButtonText: 'Entendido'
+        });
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Solicitar';
+      }
+    });
+
+    // ── Utilidad: escapar HTML para mostrar valores en SweetAlert ─
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+  </script>
 </body>
 </html>
-
-<?php
-
-require_once __DIR__ . '/config.php';
-$serverName1 = $DB_HOST_COMERCIAL;
-$connectionInfo1 = array( "Database"=>$DB_DATABASE_COMERCIAL, "UID"=>$DB_USERNAME_COMERCIAL, "PWD"=>$DB_PASSWORD_COMERCIAL,"CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
-$conn1 = sqlsrv_connect( $serverName1, $connectionInfo1);
-
-/////Query ordenes de cancelación de alimentos.
-$sql = "Select ContactName,NickName, MainAddress from [dbo].[vwLBSContactList]";
-/////Query ordenes de cancelación de alimentos.
-
-$stmt = sqlsrv_query( $conn1, $sql );
-
-$array_tot1 = [];
-
-while( $row = sqlsrv_fetch_array( $stmt, SQLSRV_FETCH_ASSOC) ) {
-/////////////////////////////////////////////////// Array nuevas variables
-// echo $row['COLABORADOR'];
-array_push($array_tot1,$row['ContactName']);
-}
-
-
-
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-  $name1 = test_input($_POST["Nombre"]);
-  $name2 = test_input($_POST["elect"]);
-  $name3 = test_input($_POST["prio"]);
-  $name4 = test_input($_POST["empre"]);
-  $name5 = test_input($_POST["Asunto"]);
-  $name6 = test_input($_POST["men"]);
-  $name7 = test_input($_POST["adj"]);
-  $name8 = test_input($_POST["fecha"]);
-  $name9 = test_input($_POST["Hora"]);
-  $name10 = test_input($_POST["tik"]);
-  
-  
-  
-
-
-  $serverName = $DB_SERVER;
-  $connectionInfo = array("Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
-  $conn = sqlsrv_connect($serverName, $connectionInfo);
-
-  $sql = "INSERT INTO TicketsSG  ([Nombre], [Prioridad], [Empresa], [Asunto], [Mensaje], [Adjuntos], [Fecha], [Hora], [Id_Ticket], [Estatus], [PA])
-          VALUES ('$name1', '$name3', '$name4', '$name5', '$name6', '$name7', '$name8', '$name9', '$name10', '', '')";
-
-  $stmt = sqlsrv_query($conn, $sql);
-  if ($stmt === false) {
-    die(print_r(sqlsrv_errors(), true));
-  }
-
-  sqlsrv_free_stmt($stmt);
-
-  echo '<script type="text/javascript">
-          alert("Se levantó de forma correcta tu ticket");
-        </script>';
-}
-
-function test_input($data) {
-  $data = trim($data);
-  $data = stripslashes($data);
-  $data = htmlspecialchars($data);
-  return $data;
-}
-?>
-
-<script>
-	var dataQ1 = <?php echo json_encode($array_tot1);?>;
-	
-	
-
-const select = document.getElementById("Nombre");
-
-// Llenar el <select> con las opciones
-dataQ1.forEach(opcion => {
-  const optionElement = document.createElement("option");
-  optionElement.value = opcion.toLowerCase().replace(/\s+/g, '_'); // valor (ej: opcion_1)
-  optionElement.textContent = opcion; // texto visible
-  select.appendChild(optionElement);
-});
-</script>
-	
