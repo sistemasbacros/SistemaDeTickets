@@ -89,52 +89,36 @@
 session_start();
 date_default_timezone_set('America/Mexico_City');
 
-// Conexión a base de datos para nombres (vwLBSContactList)
+// Contactos vía API (reemplaza conexión directa a BASENUEVA)
 require_once __DIR__ . '/config.php';
-$connectionInfo1 = array(
-    "Database" => $DB_DATABASE_COMERCIAL,
-    "UID"      => $DB_USERNAME_COMERCIAL,
-    "PWD"      => $DB_PASSWORD_COMERCIAL,
-    "CharacterSet" => "UTF-8",
-    "TrustServerCertificate" => true,
-    "Encrypt" => true
-);
-$conn1 = sqlsrv_connect($DB_HOST_COMERCIAL, $connectionInfo1);
+$apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
 
 $array_tot1 = [];
-if ($conn1) {
-    $sql = "SELECT ContactName FROM [dbo].[vwLBSContactList] ORDER BY ContactName";
-    $stmt = sqlsrv_query($conn1, $sql);
-    if ($stmt) {
-        while($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-            array_push($array_tot1, $row['ContactName']);
-        }
-        sqlsrv_free_stmt($stmt);
+$ch = curl_init($apiUrl . '/api/TicketBacros/contactos');
+curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10]);
+$resp = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+
+if ($httpCode === 200 && $resp) {
+    $json = json_decode($resp, true);
+    $items = $json['data'] ?? [];
+    foreach ($items as $item) {
+        $name = $item['nombre'] ?? $item['Nombre'] ?? '';
+        if ($name) $array_tot1[] = $name;
     }
-    sqlsrv_close($conn1);
 }
 
-// Datos de respaldo
+// Datos de respaldo si la API no responde
 if (empty($array_tot1)) {
     $array_tot1 = [
-        "LUIS ANTONIO ROMERO LOPEZ", 
-        "MARIA FERNANDA LOPEZ", 
-        "JUAN CARLOS RODRIGUEZ", 
+        "LUIS ANTONIO ROMERO LOPEZ",
+        "MARIA FERNANDA LOPEZ",
+        "JUAN CARLOS RODRIGUEZ",
         "ANA SOFIA MARTINEZ",
         "CARLOS ALBERTO PEREZ"
     ];
 }
-
-// Conexión a base de datos de Tickets
-$connectionInfo = array(
-    "Database" => $DB_DATABASE,
-    "UID"      => $DB_USERNAME,
-    "PWD"      => $DB_PASSWORD,
-    "CharacterSet" => "UTF-8",
-    "TrustServerCertificate" => true,
-    "Encrypt" => true
-);
-$conn = sqlsrv_connect($DB_SERVER, $connectionInfo);
 
 // Variables para la tabla
 $array_tt1 = []; // Id_Ticket
