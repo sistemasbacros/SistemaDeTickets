@@ -389,9 +389,9 @@ $conn = sqlsrv_connect( $serverName, $connectionInfo);
      // die( print_r( sqlsrv_errors(), true));
 // }
 
-$sql = "Select * from SeguimientodeContrato18102023 where [CC] = '$pruebaselect' order by [NO#],UNIDAD";
+$sql = "Select * from SeguimientodeContrato18102023 where [CC] = ? order by [NO#],UNIDAD";
 
-$stmt = sqlsrv_query( $conn, $sql );
+$stmt = sqlsrv_query( $conn, $sql, array($pruebaselect) );
 
 if( $stmt === false) {
     die( print_r( sqlsrv_errors(), true) );

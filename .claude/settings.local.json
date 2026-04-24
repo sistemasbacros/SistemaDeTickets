@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(docker compose:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(curl -s -X POST http://localhost:3000/auth/login -H \"Content-Type: application/json\" -d '{\"\"\"\"usuario\"\"\"\":\"\"\"\"boris.kelvin\"\"\"\",\"\"\"\"contrasena\"\"\"\":\"\"\"\"borra1200\"\"\"\"}')",
+      "Bash(TOKEN=\"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJib3Jpcy5rZWx2aW4iLCJpZF9lbXBsZWFkbyI6MTIwMC4wLCJub21icmUiOiJCT1JJUyBLRUxWSU4gUkFNSVJFWiBORVlSQSIsImFyZWEiOiJEaXJlY2Npw7NuIiwicGFzc3dvcmQiOiJib3JyYTEyMDAiLCJleHAiOjE3NzY5MDI0Mzd9.4iImPZpdWBACE2kif8tbobr2uT_BHxs6Cfz_crqQ-04\")",
+      "Bash(curl -s http://localhost:3000/api/TicketBacros/jefes-area -H \"Authorization: Bearer $TOKEN\")",
+      "Bash(find /c/Users/Boris.Ramirez/Downloads/Backup-proyectos-api -type f \\\\\\(-name *.js -o -name *.ts -o -name *.mjs \\\\\\))",
+      "Bash(grep -r 3000 /c/Users/Boris.Ramirez/Downloads --include=*.js --include=*.mjs --include=*.ts)",
+      "Bash(grep -r \"jefes\\\\|jefe\" /c/Users/Boris.Ramirez/Downloads --include=*.js --include=*.mjs --include=*.ts)",
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/Boris.Ramirez/Documents -type f -name *.ts -o -name *.js)"
     ]
   }
 }

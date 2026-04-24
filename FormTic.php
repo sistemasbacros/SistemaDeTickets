@@ -25,7 +25,7 @@
  * @dependencies
  * - JS CDN: Font Awesome 5.15.4, SweetAlert2 11
  * - CSS CDN: Google Fonts (Inter)
- * - Backend: Consultadata.php (si procesa datos)
+ * - Backend: API Rust /api/TicketBacros/tickets (POST)
  *
  * @ui_components
  * - Formulario centrado con campos de entrada
@@ -34,7 +34,7 @@
  * - Botón de envío
  *
  * @author Equipo Tecnología BacroCorp
- * @version 1.0
+ * @version 2.0
  * @since 2024
  */
 ?>
@@ -328,92 +328,98 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-  $name1 = test_input($_POST["Nombre"]);
-  $name2 = test_input($_POST["elect"]);
-  $name3 = test_input($_POST["prio"]);
-  $name4 = test_input($_POST["empre"]);
-  $name5 = test_input($_POST["Asunto"]);
-  $name6 = test_input($_POST["men"]);
-  $name7 = test_input($_POST["adj"]);
-  $name8 = test_input($_POST["fecha"]);
-  $name9 = test_input($_POST["Hora"]);
+  $name1  = test_input($_POST["Nombre"]);
+  $name2  = test_input($_POST["elect"]);
+  $name3  = test_input($_POST["prio"]);
+  $name4  = test_input($_POST["empre"]);
+  $name5  = test_input($_POST["Asunto"]);
+  $name6  = test_input($_POST["men"]);
+  $name7  = test_input($_POST["adj"]);
+  $name8  = test_input($_POST["fecha"]);
+  $name9  = test_input($_POST["Hora"]);
   $name10 = test_input($_POST["tik"]);
 
-  // Insertar en la base de datos
-  $serverName = $DB_SERVER;
-  $connectionInfo = array( "Database"=>$DB_DATABASE, "UID"=>$DB_USERNAME, "PWD"=>$DB_PASSWORD,"CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
-  $conn = sqlsrv_connect( $serverName, $connectionInfo);
+  // ── Llamada a la API Rust en lugar de sqlsrv directo ──────────────────────
+  $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
 
-  if ($conn) {
-    $sql = "INSERT INTO T3 ([Nombre],[Correo],[Prioridad],[Empresa],[Asunto],[Mensaje],[Adjuntos],[Fecha],[Hora],[Id_Ticket],[Estatus],[PA]) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', '')";
-    
-    $params = array($name1, $name2, $name3, $name4, $name5, $name6, $name7, $name8, $name9, $name10);
-    
-    $stmt = sqlsrv_query( $conn, $sql, $params );
-    
-    if( $stmt === false ) {
-      error_log("Error en la base de datos: " . print_r(sqlsrv_errors(), true));
-      showErrorAlert("Error al guardar el ticket en la base de datos.");
-    } else {
-      sqlsrv_free_stmt($stmt);
-      
-      // Enviar correos de confirmación
-      $emailResults = sendConfirmationEmails($name1, $name2, $name3, $name4, $name5, $name6, $name7, $name8, $name9, $name10);
-      
-      if ($emailResults['user'] && $emailResults['admin']) {
-        showSuccessAlert($name1, $name2, $name10, true, true);
-      } elseif ($emailResults['user'] && !$emailResults['admin']) {
-        showSuccessAlert($name1, $name2, $name10, true, false);
-      } elseif (!$emailResults['user'] && $emailResults['admin']) {
-        showSuccessAlert($name1, $name2, $name10, false, true);
-      } else {
-        showWarningAlert($name10, "No se pudieron enviar los correos de confirmación.");
-      }
-    }
-    
-    sqlsrv_close($conn);
+  $payload = json_encode([
+    'Nombre'    => $name1,
+    'Correo'    => $name2,
+    'Prioridad' => $name3,
+    'Empresa'   => $name4,
+    'Asunto'    => $name5,
+    'Mensaje'   => $name6,
+    'Adjuntos'  => $name7,
+    'Fecha'     => $name8,
+    'Hora'      => $name9,
+    'Id_Ticket' => $name10,
+  ]);
+
+  $ch = curl_init($apiUrl . '/api/TicketBacros/tickets');
+  curl_setopt($ch, CURLOPT_POST, true);
+  curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+  curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+  $response    = curl_exec($ch);
+  $http_status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  $curl_error  = curl_error($ch);
+  curl_close($ch);
+
+  if ($curl_error) {
+    error_log("Error cURL al crear ticket: " . $curl_error);
+    showErrorAlert("Error de comunicación con el sistema de tickets. Intente nuevamente.");
+  } elseif ($http_status < 200 || $http_status >= 300) {
+    $decoded = json_decode($response, true);
+    $api_msg = isset($decoded['message']) ? $decoded['message'] : "Error HTTP $http_status";
+    error_log("API error al crear ticket TI: HTTP $http_status — $response");
+    showErrorAlert("Error al guardar el ticket: " . htmlspecialchars($api_msg));
   } else {
-    error_log("Error de conexión a la base de datos: " . print_r(sqlsrv_errors(), true));
-    showErrorAlert("Error de conexión a la base de datos.");
+    // Ticket creado exitosamente en la API
+    $emailResults = sendConfirmationEmails(
+      $name1, $name2, $name3, $name4, $name5,
+      $name6, $name7, $name8, $name9, $name10
+    );
+
+    if ($emailResults['user'] && $emailResults['admin']) {
+      showSuccessAlert($name1, $name2, $name10, true, true);
+    } elseif ($emailResults['user'] && !$emailResults['admin']) {
+      showSuccessAlert($name1, $name2, $name10, true, false);
+    } elseif (!$emailResults['user'] && $emailResults['admin']) {
+      showSuccessAlert($name1, $name2, $name10, false, true);
+    } else {
+      showWarningAlert($name10, "No se pudieron enviar los correos de confirmación.");
+    }
   }
 }
 
 function sendConfirmationEmails($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId) {
   $results = [
-    'user' => false,
+    'user'  => false,
     'admin' => false
   ];
-  
-  // Enviar correo al usuario
-  $results['user'] = sendUserConfirmationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId);
-  
-  // Enviar correo al administrador
+
+  $results['user']  = sendUserConfirmationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId);
   $results['admin'] = sendAdminNotificationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId);
-  
+
   return $results;
 }
 
 function sendUserConfirmationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId) {
   try {
     $mail = new PHPMailer(true);
-    
-    // Configuración del servidor SMTP
+
     configurarSMTP($mail);
-    
-    // Destinatarios
+
     $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
     $mail->addAddress($email, $name);
-    
-    // Contenido
+
     $mail->isHTML(true);
     $mail->Subject = '✅ Confirmación de Ticket #' . $ticketId . ' - Departamento de TI BacroCorp';
-    
-    // Cuerpo del correo
-    $mail->Body = createUserEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId);
-    
+    $mail->Body    = createUserEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId);
+
     return $mail->send();
-    
+
   } catch (Exception $e) {
     error_log("Error enviando correo al usuario: " . $e->getMessage());
     return false;
@@ -423,23 +429,18 @@ function sendUserConfirmationEmail($name, $email, $priority, $department, $subje
 function sendAdminNotificationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId) {
   try {
     $mail = new PHPMailer(true);
-    
-    // Configuración del servidor SMTP
+
     configurarSMTP($mail);
-    
-    // Destinatarios
+
     $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
     $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
-    
-    // Contenido
+
     $mail->isHTML(true);
     $mail->Subject = '🚨 NUEVO TICKET #' . $ticketId . ' - ' . $priority . ' - ' . $subject;
-    
-    // Cuerpo del correo para administrador
-    $mail->Body = createAdminEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId);
-    
+    $mail->Body    = createAdminEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId);
+
     return $mail->send();
-    
+
   } catch (Exception $e) {
     error_log("Error enviando correo al administrador: " . $e->getMessage());
     return false;
@@ -447,9 +448,8 @@ function sendAdminNotificationEmail($name, $email, $priority, $department, $subj
 }
 
 function createUserEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId) {
-  $priorityClass = strtolower($priority);
   $priorityColor = getPriorityColor($priority);
-  
+
   return '
   <!DOCTYPE html>
   <html>
@@ -550,9 +550,9 @@ function createUserEmailTemplate($name, $email, $priority, $department, $subject
                   <strong>Estimado/a ' . $name . ',</strong>
               </div>
               <p>Hemos recibido correctamente tu solicitud de soporte técnico y hemos creado un ticket con la siguiente información:</p>
-              
+
               <div class="ticket-id">Ticket #: ' . $ticketId . '</div>
-              
+
               <div class="ticket-info">
                   <div class="ticket-detail">
                       <span class="ticket-label">Fecha y Hora:</span>
@@ -571,17 +571,17 @@ function createUserEmailTemplate($name, $email, $priority, $department, $subject
                       <span class="priority-badge" style="background: ' . $priorityColor . ';">' . $priority . '</span>
                   </div>
               </div>
-              
+
               <div class="message">
                   <p><strong>Descripción del problema:</strong></p>
                   <p>' . $description . '</p>
                   ' . ($message ? '<p><strong>Detalles adicionales:</strong></p><p>' . $message . '</p>' : '') . '
               </div>
-              
+
               <p>Nuestro equipo de especialistas revisará tu solicitud a la mayor brevedad posible y te mantendremos informado sobre el progreso.</p>
-              
+
               <p>Si necesitas agregar información adicional a tu ticket o tienes alguna pregunta, por favor responde a este correo haciendo referencia al número de ticket proporcionado.</p>
-              
+
               <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #555;">
                   <p>Atentamente,<br>
                   <strong>Equipo de Soporte Técnico</strong><br>
@@ -600,8 +600,8 @@ function createUserEmailTemplate($name, $email, $priority, $department, $subject
 
 function createAdminEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId) {
   $priorityColor = getPriorityColor($priority);
-  $urgencyIcon = getUrgencyIcon($priority);
-  
+  $urgencyIcon   = getUrgencyIcon($priority);
+
   return '
   <!DOCTYPE html>
   <html>
@@ -719,12 +719,12 @@ function createAdminEmailTemplate($name, $email, $priority, $department, $subjec
               <div class="alert-banner">
                   ⚠️ Se ha generado un nuevo ticket con prioridad ' . $priority . ' que requiere tu atención inmediata.
               </div>
-              
+
               <div class="ticket-card">
                   <div style="text-align: center; margin-bottom: 15px;">
                       <span style="background: #003366; color: white; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: bold;">TICKET #: ' . $ticketId . '</span>
                   </div>
-                  
+
                   <div class="ticket-detail">
                       <span class="ticket-label">Fecha y Hora:</span>
                       <span>' . $date . ' - ' . $time . '</span>
@@ -738,7 +738,7 @@ function createAdminEmailTemplate($name, $email, $priority, $department, $subjec
                       <span><strong>' . $subject . '</strong></span>
                   </div>
               </div>
-              
+
               <div class="user-info">
                   <h3 style="margin-top: 0; color: #2c3e50;">👤 Información del Usuario</h3>
                   <div class="ticket-detail">
@@ -754,20 +754,20 @@ function createAdminEmailTemplate($name, $email, $priority, $department, $subjec
                       <span>' . $department . '</span>
                   </div>
               </div>
-              
+
               <div class="problem-description">
                   <h3 style="margin-top: 0; color: #856404;">📋 Descripción del Problema</h3>
                   <p><strong>' . $description . '</strong></p>
                   ' . ($message ? '<p><strong>Detalles adicionales:</strong></p><p>' . $message . '</p>' : '') . '
               </div>
-              
+
               <div class="action-buttons">
                   <p style="font-weight: bold; margin-bottom: 15px;">🚀 Acciones Recomendadas:</p>
                   <p>• Revisar el ticket en el sistema de gestión<br>
                   • Asignar técnico según la prioridad<br>
                   • Contactar al usuario si se requiere información adicional</p>
               </div>
-              
+
               <div style="text-align: center; color: #666; font-size: 14px; margin-top: 20px;">
                   <p>Este es un mensaje automático del Sistema de Tickets BacroCorp</p>
               </div>
@@ -783,25 +783,25 @@ function createAdminEmailTemplate($name, $email, $priority, $department, $subjec
 
 function getPriorityColor($priority) {
   switch ($priority) {
-    case 'Alto': return '#dc3545';
+    case 'Alto':  return '#dc3545';
     case 'Medio': return '#ffc107';
-    case 'Bajo': return '#28a745';
-    default: return '#6c757d';
+    case 'Bajo':  return '#28a745';
+    default:      return '#6c757d';
   }
 }
 
 function getUrgencyIcon($priority) {
   switch ($priority) {
-    case 'Alto': return '🚨🔥';
+    case 'Alto':  return '🚨🔥';
     case 'Medio': return '⚠️📋';
-    case 'Bajo': return 'ℹ️📥';
-    default: return '📝';
+    case 'Bajo':  return 'ℹ️📥';
+    default:      return '📝';
   }
 }
 
 function showSuccessAlert($name, $email, $ticketId, $userEmailSent, $adminEmailSent) {
   $emailStatus = '';
-  
+
   if ($userEmailSent && $adminEmailSent) {
     $emailStatus = '<p style="color: #28a745; font-weight: bold;">✓ Correos enviados al usuario y al administrador</p>';
   } elseif ($userEmailSent && !$adminEmailSent) {
@@ -811,7 +811,7 @@ function showSuccessAlert($name, $email, $ticketId, $userEmailSent, $adminEmailS
   } else {
     $emailStatus = '<p style="color: #dc3545; font-weight: bold;">✗ No se pudieron enviar los correos</p>';
   }
-  
+
   echo '
   <script>
   Swal.fire({
@@ -820,17 +820,17 @@ function showSuccessAlert($name, $email, $ticketId, $userEmailSent, $adminEmailS
           <div style="text-align: center; padding: 20px;">
               <div style="font-size: 60px; color: #28a745; margin-bottom: 20px;">🎉</div>
               <h2 style="color: #003366; margin-bottom: 15px;">Solicitud Registrada</h2>
-              
+
               <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin: 15px 0;">
                   <p style="margin: 5px 0;"><strong>Nombre:</strong> ' . $name . '</p>
                   <p style="margin: 5px 0;"><strong>Correo:</strong> ' . $email . '</p>
-                  <p style="margin: 10px 0;"><strong>Ticket ID:</strong> 
+                  <p style="margin: 10px 0;"><strong>Ticket ID:</strong>
                       <span style="background: #003366; color: white; padding: 8px 15px; border-radius: 20px; font-size: 16px; font-weight: bold;">' . $ticketId . '</span>
                   </p>
               </div>
-              
+
               ' . $emailStatus . '
-              
+
               <p style="color: #666; font-size: 14px; margin-top: 15px;">El ticket ha sido registrado en el sistema correctamente.</p>
           </div>
       `,
@@ -853,11 +853,11 @@ function showWarningAlert($ticketId, $error) {
           <div style="text-align: center; padding: 20px;">
               <div style="font-size: 60px; color: #ffc107; margin-bottom: 20px;">📝</div>
               <h2 style="color: #003366; margin-bottom: 15px;">¡Solicitud Registrada!</h2>
-              
-              <p style="margin-bottom: 20px;"><strong>Ticket ID:</strong> 
+
+              <p style="margin-bottom: 20px;"><strong>Ticket ID:</strong>
                   <span style="background: #003366; color: white; padding: 8px 15px; border-radius: 20px; font-size: 16px; font-weight: bold;">' . $ticketId . '</span>
               </p>
-              
+
               <p style="color: #666; font-size: 14px; margin-bottom: 10px;">El ticket se ha guardado en el sistema correctamente.</p>
               <p style="color: #dc3545; font-size: 14px; font-weight: bold;">Error: ' . addslashes($error) . '</p>
           </div>

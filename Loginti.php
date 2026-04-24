@@ -114,137 +114,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
             $loginError = 'Usuario y contraseña son requeridos';
             $debugInfo[] = "❌ Error: Campos vacíos";
         } else {
-            // Configuración de conexión a la base de datos usando config.php
-            require_once __DIR__ . '/config.php';
-            
-            // Verificar que las variables de entorno estén definidas
-            if (empty($DB_HOST)) {
-                writeLog("❌ ERROR: Variable DB_HOST no definida", 'ERROR');
-                $debugInfo[] = "❌ ERROR: Variable de entorno DB_HOST no está definida";
-            }
-            if (empty($DB_DATABASE_COMEDOR)) {
-                writeLog("❌ ERROR: Variable DB_DATABASE_COMEDOR no definida", 'ERROR');
-                $debugInfo[] = "❌ ERROR: Variable de entorno DB_DATABASE_COMEDOR no está definida";
-            }
-            if (empty($DB_USERNAME)) {
-                writeLog("❌ ERROR: Variable DB_USERNAME no definida", 'ERROR');
-                $debugInfo[] = "❌ ERROR: Variable de entorno DB_USERNAME no está definida";
-            }
-            
-            $dbPort = $DB_PORT ?: '1433';
-            $serverName = ($DB_HOST ?: 'SERVIDOR_NO_DEFINIDO') . ',' . $dbPort;
-            $dbName = $DB_DATABASE_COMEDOR ?: 'Comedor';
-            $dbUser = $DB_USERNAME ?: 'USUARIO_NO_DEFINIDO';
-            $dbPass = $DB_PASSWORD ?: '';
-            
-            $connectionOptions = array(
-                "Database" => $dbName,
-                "Uid" => $dbUser,
-                "PWD" => $dbPass,
-                "CharacterSet" => "UTF-8",
-                "TrustServerCertificate" => true,  // Confiar en certificados auto-firmados
-                "Encrypt" => true                   // Mantener cifrado pero sin verificar cert
-            );
-            
-            $debugInfo[] = "🔌 Intentando conectar a: " . $serverName;
-            $debugInfo[] = "🔌 Base de datos: Comedor";
-            
-            // Establecer conexión
-            $conn = sqlsrv_connect($serverName, $connectionOptions);
-            
-            if ($conn) {
-                $debugInfo[] = "✅ Conexión exitosa a SQL Server";
-                
-                // Consulta para verificar las credenciales
-                $sql = "SELECT Id_Empleado, Nombre, Area, Usuario 
-                        FROM Conped 
-                        WHERE Usuario = ? AND Contrasena = ?";
-                $params = array($usuario, $contrasena);
-                
-                $debugInfo[] = "📝 Ejecutando consulta: " . $sql;
-                $debugInfo[] = "📝 Parámetros: Usuario=" . $usuario . ", Contraseña=" . $contrasena;
-                
-                $stmt = sqlsrv_query($conn, $sql, $params);
-                
-                if ($stmt) {
-                    $debugInfo[] = "✅ Consulta ejecutada correctamente";
-                    
-                    if (sqlsrv_has_rows($stmt)) {
-                        $debugInfo[] = "✅ Usuario encontrado en la base de datos";
-                        
-                        $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
-                        
-                        // LIMPIAR SESIÓN EXISTENTE COMPLETAMENTE
-                        session_regenerate_id(true);
-                        
-                        // Configurar sesión con múltiples factores de seguridad
-                        $_SESSION = array(); // Limpiar todo primero
-                        $_SESSION['user_id'] = $row['Id_Empleado'];
-                        $_SESSION['user_name'] = $row['Nombre'];
-                        $_SESSION['user_area'] = $row['Area'];
-                        $_SESSION['user_username'] = $row['Usuario'];
-                        $_SESSION['logged_in'] = true;
-                        $_SESSION['LOGIN_TIME'] = time();
-                        $_SESSION['LAST_ACTIVITY'] = time();
-                        $_SESSION['last_activity'] = time(); // Para verificación de acceso directo
-                        $_SESSION['authenticated_from_login'] = true; // BANDERA CRÍTICA
-                        $_SESSION['session_token'] = bin2hex(random_bytes(32)); // Token único de sesión
-                        $_SESSION['ip_address'] = $_SERVER['REMOTE_ADDR'];
-                        $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'];
-                        $_SESSION['initiated'] = true;
-                        $_SESSION['last_regeneration'] = time();
-                        $_SESSION['login_source'] = 'form_login'; // VERIFICACIÓN CRÍTICA PARA ACCESO DIRECTO
-                        $_SESSION['origin_token'] = bin2hex(random_bytes(16)); // Token de origen único
-                        
-                        $debugInfo[] = "✅ Sesión configurada para: " . $row['Nombre'];
-                        $debugInfo[] = "✅ Bandera authenticated_from_login establecida";
-                        $debugInfo[] = "✅ Token de sesión generado";
-                        $debugInfo[] = "✅ IP address almacenada: " . $_SERVER['REMOTE_ADDR'];
-                        $debugInfo[] = "✅ Login source establecido: form_login";
-                        $debugInfo[] = "✅ Token de origen generado";
-                        $redirectTarget = getRedirectTarget();
-                        $debugInfo[] = "🔄 Redirigiendo a " . $redirectTarget . "...";
+            // ── Autenticacion via API ──────────────────────────────────
+            // PHP corre en Docker: host.docker.internal apunta a la maquina host
+            $apiLoginUrl = 'http://host.docker.internal:3000/auth/login';
+            $apiPayload  = json_encode([
+                'usuario'    => $usuario,
+                'contrasena' => $contrasena,
+            ], JSON_UNESCAPED_UNICODE);
 
-                        // Cerrar conexión
-                        sqlsrv_free_stmt($stmt);
-                        sqlsrv_close($conn);
+            $debugInfo[] = "🔑 Autenticando via API: " . $apiLoginUrl;
 
-                        header("Location: " . $redirectTarget);
-                        ob_end_flush();
-                        exit();
-                        
-                    } else {
-                        $loginError = 'Usuario o contraseña incorrectos';
-                        $debugInfo[] = "❌ No se encontró usuario con esas credenciales";
-                    }
-                } else {
-                    $loginError = 'Error en la consulta a la base de datos';
-                    $debugInfo[] = "❌ Error en la consulta SQL";
-                    $errors = sqlsrv_errors();
-                    if ($errors) {
-                        foreach($errors as $error) {
-                            $debugInfo[] = "SQL Error: " . $error['message'];
-                            $debugInfo[] = "SQL State: " . $error['SQLSTATE'];
-                            $debugInfo[] = "Code: " . $error['code'];
-                        }
-                    }
-                }
-                
-                if ($stmt) sqlsrv_free_stmt($stmt);
-                sqlsrv_close($conn);
-                
+            $ch = curl_init($apiLoginUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $apiPayload,
+                CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 15,
+                CURLOPT_CONNECTTIMEOUT => 10,
+            ]);
+            $apiResp     = curl_exec($ch);
+            $apiCurlErr  = curl_error($ch);
+            $apiHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $debugInfo[] = "🔑 API HTTP: " . $apiHttpCode . " | cURL: " . ($apiCurlErr ?: 'OK');
+
+            if ($apiCurlErr) {
+                $loginError = 'No se pudo conectar al servidor de autenticación.';
+                $debugInfo[] = "❌ cURL error: " . $apiCurlErr;
             } else {
-                $loginError = 'Error de conexión a la base de datos';
-                $debugInfo[] = "❌ No se pudo conectar a SQL Server";
-                $errors = sqlsrv_errors();
-                if ($errors) {
-                    foreach($errors as $error) {
-                        $debugInfo[] = "Connection Error: " . $error['message'];
-                        $debugInfo[] = "Connection State: " . $error['SQLSTATE'];
-                        $debugInfo[] = "Code: " . $error['code'];
-                    }
+                $apiData = json_decode($apiResp, true);
+
+                if ($apiHttpCode === 200 && !empty($apiData['token'])) {
+                    $debugInfo[] = "✅ Login exitoso, JWT obtenido";
+
+                    $token = $apiData['token'];
+
+                    // Extraer datos del usuario del JWT payload (base64)
+                    $jwtParts = explode('.', $token);
+                    $jwtPayload = json_decode(base64_decode(strtr($jwtParts[1] ?? '', '-_', '+/')), true) ?: [];
+
+                    // Datos del usuario: primero del body de respuesta, luego del JWT
+                    $userData = $apiData['user'] ?? $apiData['usuario'] ?? $jwtPayload;
+
+                    $userName   = $userData['nombre']    ?? $userData['nombre_completo'] ?? $userData['Nombre'] ?? $usuario;
+                    $userArea   = $userData['area']       ?? $userData['Area']            ?? '';
+                    $userId     = $userData['id']         ?? $userData['Id_Empleado']     ?? $userData['id_empleado'] ?? '';
+                    $userLogin  = $userData['usuario']    ?? $userData['Usuario']         ?? $usuario;
+
+                    $debugInfo[] = "✅ Usuario: " . $userName . " | Area: " . $userArea;
+
+                    // LIMPIAR SESIÓN EXISTENTE COMPLETAMENTE
+                    session_regenerate_id(true);
+
+                    // Configurar sesión
+                    $_SESSION = array();
+                    $_SESSION['user_id']       = $userId;
+                    $_SESSION['user_name']     = $userName;
+                    $_SESSION['user_area']     = $userArea;
+                    $_SESSION['user_username'] = $userLogin;
+                    $_SESSION['api_jwt']       = $token;
+                    $_SESSION['logged_in']     = true;
+                    $_SESSION['LOGIN_TIME']    = time();
+                    $_SESSION['LAST_ACTIVITY'] = time();
+                    $_SESSION['last_activity'] = time();
+                    $_SESSION['authenticated_from_login'] = true;
+                    $_SESSION['session_token']    = bin2hex(random_bytes(32));
+                    $_SESSION['ip_address']       = $_SERVER['REMOTE_ADDR'];
+                    $_SESSION['user_agent']       = $_SERVER['HTTP_USER_AGENT'];
+                    $_SESSION['initiated']        = true;
+                    $_SESSION['last_regeneration'] = time();
+                    $_SESSION['login_source']     = 'form_login';
+                    $_SESSION['origin_token']     = bin2hex(random_bytes(16));
+
+                    $debugInfo[] = "✅ Sesión configurada con JWT";
+
+                    $redirectTarget = getRedirectTarget();
+                    $debugInfo[] = "🔄 Redirigiendo a " . $redirectTarget;
+
+                    header("Location: " . $redirectTarget);
+                    ob_end_flush();
+                    exit();
+
+                } elseif ($apiHttpCode === 401 || $apiHttpCode === 403) {
+                    $loginError = 'Usuario o contraseña incorrectos';
+                    $debugInfo[] = "❌ Credenciales inválidas (HTTP " . $apiHttpCode . ")";
                 } else {
-                    $debugInfo[] = "No hay información específica del error de conexión";
+                    $msg = $apiData['message'] ?? $apiData['error'] ?? 'Error desconocido';
+                    $loginError = 'Error del servidor de autenticación: ' . htmlspecialchars($msg);
+                    $debugInfo[] = "❌ API error: HTTP " . $apiHttpCode . " - " . substr($apiResp ?: '(vacío)', 0, 200);
                 }
             }
         }

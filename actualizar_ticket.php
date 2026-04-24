@@ -5,8 +5,8 @@
  *
  * @description
  * Endpoint de API que maneja actualizaciones de tickets del módulo de
- * Servicios Generales. Recibe datos vía POST y actualiza el registro
- * correspondiente en la tabla TicketsSG.
+ * Servicios Generales. Recibe datos vía POST, llama a la API REST de Rust
+ * (PUT /api/TicketBacros/tickets-sg/:id) y retorna el resultado.
  *
  * Este archivo es diferente a update_ticket.php que trabaja con la tabla T3.
  * actualizar_ticket.php trabaja específicamente con tickets de Servicios Generales.
@@ -16,140 +16,133 @@
  * - Cambio de estatus del ticket
  * - Soporte para subida de archivos (si existe)
  *
+ * @api PUT {apiUrl}/api/TicketBacros/tickets-sg/:id
+ *
  * @module API de Servicios Generales
  * @access API (POST request)
  *
  * @dependencies
- * - PHP: sqlsrv extension, json_encode
- *
- * @database
- * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
- * - Base de datos: Ticket
- * - Tabla: TicketsSG (UPDATE)
+ * - config.php: PDF_API_URL env var
+ * - PHP curl extension
  *
  * @inputs
- * - POST['ticketId']: ID del ticket a actualizar (requerido)
- * - POST['asignadoA']: Persona asignada (requerido)
+ * - POST['ticketId']:    ID del ticket a actualizar (requerido)
+ * - POST['asignadoA']:   Persona asignada (requerido)
  * - POST['nuevoEstatus']: Nuevo estado del ticket (requerido)
- * - FILES: Archivos adjuntos (opcional)
+ *                         Valores válidos en la API: Pendiente, En proceso, Resuelto, Cancelado
+ * - FILES: Archivos adjuntos (opcional, se procesa localmente antes de llamar la API)
  *
  * @outputs
- * - JSON: {"success": true/false, "message": "..."}
+ * - JSON: {"success": true, "message": "..."}
  * - O {"error": "descripción del error"}
  *
- * @security
- * - Validación de campos requeridos
- * - Sin autenticación de sesión (añadir recomendado)
- * - Errores de SQL pueden exponerse vía JSON
- *
  * @author Equipo Tecnología BacroCorp
- * @version 1.5
+ * @version 2.0 (migrado a API REST - sin sqlsrv)
  * @since 2024
+ * @updated 2026-04-23
  */
 
 require_once __DIR__ . '/config.php';
 
-$serverName = $DB_SERVER;
-$connectionInfo = array(
-    "Database" => $DB_DATABASE,
-    "UID" => $DB_USERNAME,
-    "PWD" => $DB_PASSWORD,
-    "CharacterSet" => "UTF-8",
-    "TrustServerCertificate" => true,
-    "Encrypt" => true
-);
-
-$conn = sqlsrv_connect($serverName, $connectionInfo);
-if (!$conn) {
-    die(json_encode(['error' => sqlsrv_errors()], JSON_PRETTY_PRINT));
-}
+// URL base de la API Rust
+$apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
 
 // Recibe datos POST con validación
-$id = $_POST['ticketId'] ?? '';
-$asignado = $_POST['asignadoA'] ?? '';
-$estatus = $_POST['nuevoEstatus'] ?? '';
+$id      = trim($_POST['ticketId']     ?? '');
+$asignado = trim($_POST['asignadoA']   ?? '');
+$estatus  = trim($_POST['nuevoEstatus'] ?? '');
 
 if (!$id || !$asignado || !$estatus) {
+    header('Content-Type: application/json');
     echo json_encode(['error' => 'Faltan datos requeridos']);
     exit;
 }
 
+// ------------------------------------------------------------------
+// Procesar archivo de evidencia si existe (lógica local, sin BD)
+// El archivo se guarda localmente; la ruta se podría enviar a la API
+// en una llamada separada si el endpoint lo soportara.
+// ------------------------------------------------------------------
+if (isset($_FILES['evidenciaFoto']) && $_FILES['evidenciaFoto']['error'] === UPLOAD_ERR_OK) {
+    $fileTmpPath = $_FILES['evidenciaFoto']['tmp_name'];
+    $fileName    = $_FILES['evidenciaFoto']['name'];
+    $fileSize    = $_FILES['evidenciaFoto']['size'];
+    $fileType    = $_FILES['evidenciaFoto']['type'];
 
+    $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    $maxSize      = 5 * 1024 * 1024; // 5 MB
 
-/////////////////////////
-
-
-// Procesar archivo si existe
-    if (isset($_FILES['evidenciaFoto']) && $_FILES['evidenciaFoto']['error'] === UPLOAD_ERR_OK) {
-        $fileTmpPath = $_FILES['evidenciaFoto']['tmp_name'];
-        $fileName = $_FILES['evidenciaFoto']['name'];
-        $fileSize = $_FILES['evidenciaFoto']['size'];
-        $fileType = $_FILES['evidenciaFoto']['type'];
-
-        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-        $maxSize = 5 * 1024 * 1024; // 5MB
-
-        if (in_array($fileType, $allowedTypes) && $fileSize <= $maxSize) {
-            $uploadDir = 'uploads/'; // carpeta para guardar evidencias (asegúrate que existe y tiene permisos)
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
-            $fileNameCmps = explode(".", $fileName);
-            $fileExtension = strtolower(end($fileNameCmps));
-            $newFileName = 'ticket_' . $ticketId . '_' . time() . '.' . $fileExtension;
-            $destPath = $uploadDir . $newFileName;
-
-            if (move_uploaded_file($fileTmpPath, $destPath)) {
-                // Guardar $destPath en base de datos asociado al ticket
-                // Ejemplo (ajusta según tu tabla y conexión):
-                $sqlUpdate = "UPDATE TicketsSG SET ENLACE = ? WHERE Id_Ticket = ?";
-                $params = [$destPath, $id];			
-              // Ejecutar consulta
-          $stmt = sqlsrv_query($conn, $sqlUpdate, $params);
-                // Ejecutar actualización con sqlsrv_prepare / sqlsrv_execute
-            } else {
-                http_response_code(500);
-                echo "Error al mover archivo.";
-                exit;
-            }
-        } else {
-            http_response_code(400);
-            echo "Tipo o tamaño de archivo no permitido.";
-            exit;
-        }
+    if (!in_array($fileType, $allowedTypes) || $fileSize > $maxSize) {
+        http_response_code(400);
+        echo "Tipo o tamaño de archivo no permitido.";
+        exit;
     }
 
-    echo "OK";
-////////////////////////
+    $uploadDir = __DIR__ . '/uploads/';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
 
+    $fileExt     = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+    $newFileName = 'ticket_' . $id . '_' . time() . '.' . $fileExt;
+    $destPath    = $uploadDir . $newFileName;
 
-// Fecha y hora actuales
-date_default_timezone_set('America/Mexico_City');
-$fechaActual = date('Y-m-d');
-$horaActual = date('H:i:s');
+    if (!move_uploaded_file($fileTmpPath, $destPath)) {
+        http_response_code(500);
+        echo "Error al mover archivo.";
+        exit;
+    }
 
-// Construcción dinámica de la consulta según el estatus
-if ($estatus === 'Resuelto' || $estatus === 'Cancelado') {
-    $sql = "UPDATE TicketsSG SET PA = ?, Estatus = ?, Fecha_Termino = ?, Hora_Termino = ? WHERE Id_Ticket = ?";
-    $params = [$asignado, $estatus, $fechaActual, $horaActual, $id];
-} elseif ($estatus === 'En proceso') {
-    $sql = "UPDATE TicketsSG SET PA = ?, Estatus = ?, Fecha_Proceso = ?, Hora_Proceso = ? WHERE Id_Ticket = ?";
-    $params = [$asignado, $estatus, $fechaActual, $horaActual, $id];
-} else {
-    // Limpia campos de cierre si no está cerrado ni en proceso
-    $sql = "UPDATE TicketsSG SET PA = ?, Estatus = ?, Fecha_Termino = NULL, Hora_Termino = NULL WHERE Id_Ticket = ?";
-    $params = [$asignado, $estatus, $id];
+    // Archivo subido correctamente; continúa con la actualización del ticket
+    // (el enlace de evidencia se almacenaría via un endpoint dedicado si existiera)
 }
 
-// Ejecutar consulta
-$stmt = sqlsrv_query($conn, $sql, $params);
+// ------------------------------------------------------------------
+// Llamar a la API Rust: PUT /api/TicketBacros/tickets-sg/:id
+//
+// La API acepta JSON con: ticketId, asignadoA, nuevoEstatus
+// Estatus válidos en Rust: ["Pendiente", "En proceso", "Resuelto", "Cancelado"]
+//
+// Nota: el original PHP usaba "En proceso" (minúscula), que coincide con la API.
+// ------------------------------------------------------------------
+$putUrl  = $apiUrl . '/api/TicketBacros/tickets-sg/' . urlencode($id);
+$putBody = json_encode([
+    'ticketId'     => $id,
+    'asignadoA'    => $asignado,
+    'nuevoEstatus' => $estatus,
+]);
 
-if ($stmt === false) {
-    echo json_encode(['error' => sqlsrv_errors()], JSON_PRETTY_PRINT);
+$ch = curl_init($putUrl);
+curl_setopt_array($ch, [
+    CURLOPT_CUSTOMREQUEST  => 'PUT',
+    CURLOPT_POSTFIELDS     => $putBody,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Accept: application/json'],
+    CURLOPT_TIMEOUT        => 15,
+    CURLOPT_CONNECTTIMEOUT => 5,
+]);
+
+$response  = curl_exec($ch);
+$httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlError = curl_error($ch);
+curl_close($ch);
+
+header('Content-Type: application/json');
+
+if ($curlError) {
+    http_response_code(500);
+    echo json_encode(['error' => "Error de conexión con la API: $curlError"]);
     exit;
 }
 
-echo json_encode(['success' => true]);
-?>
+$data = json_decode($response, true);
 
+if ($httpCode < 200 || $httpCode >= 300) {
+    $apiMsg = $data['error'] ?? $data['message'] ?? $response;
+    http_response_code($httpCode ?: 500);
+    echo json_encode(['error' => "Error al actualizar el ticket (HTTP $httpCode): $apiMsg"]);
+    exit;
+}
 
+// Propagar la respuesta de la API tal cual (mantiene compatibilidad con el frontend)
+echo json_encode(['success' => true, 'message' => $data['message'] ?? 'Ticket actualizado']);

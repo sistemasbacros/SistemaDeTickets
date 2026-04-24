@@ -5,123 +5,68 @@
  *
  * @description
  * Módulo de visualización y búsqueda de tickets con capacidad de filtrado
- * avanzado por nombre, rango de fechas y otros criterios. Presenta una
- * tabla con todos los tickets que cumplen los filtros especificados.
+ * avanzado por nombre y rango de fechas.
  *
- * Este archivo no requiere autenticación (considerar agregar seguridad)
- * y permite consultar el historial completo de tickets con múltiples
- * columnas de información incluyendo timestamps de cada estado.
- *
- * Filtros disponibles:
- * - Nombre del solicitante (búsqueda parcial con LIKE)
- * - Fecha inicial (rango de búsqueda)
- * - Fecha final (rango de búsqueda)
- *
- * @module Módulo de Reportes y Consultas
- * @access Público (sin autenticación - ADVERTENCIA de seguridad)
- *
- * @dependencies
- * - PHP: sqlsrv extension
- * - JS CDN: DataTables, Bootstrap, jQuery
- *
- * @database
- * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
- * - Base de datos: Ticket
- * - Tabla: T3 (consulta con filtros)
- * - Columnas: Nombre, Correo, Prioridad, Empresa, Asunto, Mensaje,
- *             Adjuntos, Fecha, Hora, Id_Ticket, Estatus, PA,
- *             HoraFin, Tipo, Clasificacion, Tiempo_Ejec, FinT...
- *
- * @inputs
- * - GET['nombre']: Filtro por nombre (opcional)
- * - GET['fecha_inicial']: Fecha inicio del rango (opcional)
- * - GET['fecha_final']: Fecha fin del rango (opcional)
- *
- * @security
- * - ADVERTENCIA: Sin verificación de sesión
- * - Credenciales hardcoded (migrar a .env)
- * - Parámetros GET sanitizados con LIKE
+ * Migrado a Rust API:
+ * - GET /api/TicketBacros/tickets  → lista todos los tickets de T3
+ *   Los filtros por nombre y fechas se aplican en el cliente (JavaScript),
+ *   igual que lo hacía el original después de cargar todos los datos.
  *
  * @author Equipo Tecnología BacroCorp
- * @version 1.5
+ * @version 2.0
  * @since 2024
  */
 
-////////////////// Backend (PHP) - Conexión y Consulta con Filtros
 require_once __DIR__ . '/config.php';
-$serverName = $DB_SERVER;
-$connectionInfo = array("Database" => $DB_DATABASE, "UID" => $DB_USERNAME, "PWD" => $DB_PASSWORD, "CharacterSet" => "UTF-8", "TrustServerCertificate" => true, "Encrypt" => true);
-$conn = sqlsrv_connect($serverName, $connectionInfo);
+$apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
 
-// Obtener los filtros de la solicitud GET
-$nombreFiltro = isset($_GET['nombre']) ? "%" . $_GET['nombre'] . "%" : "%";
-$fechaInicioFiltro = isset($_GET['fecha_inicial']) ? $_GET['fecha_inicial'] : "1900-01-01";
-$fechaFinFiltro = isset($_GET['fecha_final']) ? $_GET['fecha_final'] : "9999-12-31";
+// Obtener todos los tickets desde la API
+$tickets = [];
+$ch = curl_init($apiUrl . '/api/TicketBacros/tickets');
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT        => 15,
+    CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+]);
+$resp     = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlErr  = curl_error($ch);
+curl_close($ch);
 
-// Consulta SQL con filtros
-$sql = "SELECT 
-    [Nombre],
-    [Correo],
-    [Prioridad],
-    [Empresa],
-    [Asunto],
-    [Mensaje],
-    [Adjuntos],
-    [Fecha] = LTRIM(RTRIM(CAST(CONVERT(DATE, fecha, 103) AS NVARCHAR))),
-    [Hora],
-    [Id_Ticket],
-    [Estatus],
-    [PA],
-    [HoraFin],
-    [Tipo],
-    [Clasificacion],
-    [Tiempo_Ejec],
-    [FinT],
-    [FeT],
-    [HoraT] 
-FROM [dbo].[T3] 
-WHERE 
-    (CONVERT(DATE, fecha, 103) BETWEEN ? AND ?) 
-    AND (Nombre LIKE ?) 
-ORDER BY CONVERT(DATE, fecha, 103)";
-
-// Parámetros para la consulta
-$params = array($fechaInicioFiltro, $fechaFinFiltro, $nombreFiltro);
-
-// Ejecutar la consulta
-$stmt = sqlsrv_query($conn, $sql, $params);
-
-// Arreglos para almacenar los resultados
-$array1 = [];
-$array2 = [];
-$array3 = [];
-$array4 = [];
-$array5 = [];
-$array6 = [];
-$array7 = [];
-$array8 = [];
-$array9 = [];
-$array10 = [];
-$array11 = [];
-$array12 = [];
-
-while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-    array_push($array1, $row['Nombre']);
-    array_push($array2, $row['Correo']);
-    array_push($array3, $row['Prioridad']);
-    array_push($array4, $row['Empresa']);
-    array_push($array5, $row['Asunto']);
-    array_push($array6, $row['Mensaje']);
-    array_push($array7, $row['Adjuntos']);
-    array_push($array8, $row['Fecha']);
-    array_push($array9, $row['Hora']);
-    array_push($array10, $row['Id_Ticket']);
-    array_push($array11, $row['Estatus']);
-    array_push($array12, $row['PA']);
+if (!$curlErr && $httpCode === 200 && $resp) {
+    $data = json_decode($resp, true);
+    if (is_array($data)) {
+        $tickets = $data;
+    }
 }
 
-// Liberar la consulta
-sqlsrv_free_stmt($stmt);
+// Construir arrays paralelos para compatibilidad con el JS original
+$array1  = []; $array2  = []; $array3  = []; $array4  = [];
+$array5  = []; $array6  = []; $array7  = []; $array8  = [];
+$array9  = []; $array10 = []; $array11 = []; $array12 = [];
+
+foreach ($tickets as $row) {
+    $array1[]  = $row['Nombre']    ?? $row['nombre']    ?? '';
+    $array2[]  = $row['Correo']    ?? $row['correo']    ?? '';
+    $array3[]  = $row['Prioridad'] ?? $row['prioridad'] ?? '';
+    $array4[]  = $row['Empresa']   ?? $row['empresa']   ?? '';
+    $array5[]  = $row['Asunto']    ?? $row['asunto']    ?? '';
+    $array6[]  = $row['Mensaje']   ?? $row['mensaje']   ?? '';
+    $array7[]  = $row['Adjuntos']  ?? $row['adjuntos']  ?? '';
+
+    // Fecha: normalizar a YYYY-MM-DD para facilitar comparación en JS
+    $fecha = $row['Fecha'] ?? $row['fecha'] ?? '';
+    if ($fecha instanceof DateTime) $fecha = $fecha->format('Y-m-d');
+    $array8[] = (string)$fecha;
+
+    $hora = $row['Hora'] ?? $row['hora'] ?? '';
+    if ($hora instanceof DateTime) $hora = $hora->format('H:i:s');
+    $array9[] = (string)$hora;
+
+    $array10[] = $row['Id_Ticket'] ?? $row['id_ticket'] ?? '';
+    $array11[] = $row['Estatus']   ?? $row['estatus']   ?? '';
+    $array12[] = $row['PA']        ?? $row['pa']        ?? '';
+}
 ?>
 
 <!DOCTYPE html>
@@ -222,8 +167,8 @@ sqlsrv_free_stmt($stmt);
         }
 
         table.dataTable thead th {
-            background-color: #1E4E79 !important; /* Azul marino igual que controles */
-            color: white !important; /* Letras blancas */
+            background-color: #1E4E79 !important;
+            color: white !important;
             font-weight: 600 !important;
             position: sticky;
             top: 0;
@@ -333,15 +278,15 @@ sqlsrv_free_stmt($stmt);
     </div>
 
     <script>
-        var darray1 = <?php echo json_encode($array1); ?>;
-        var darray2 = <?php echo json_encode($array2); ?>;
-        var darray3 = <?php echo json_encode($array3); ?>;
-        var darray4 = <?php echo json_encode($array4); ?>;
-        var darray5 = <?php echo json_encode($array5); ?>;
-        var darray6 = <?php echo json_encode($array6); ?>;
-        var darray7 = <?php echo json_encode($array7); ?>;
-        var darray8 = <?php echo json_encode($array8); ?>;
-        var darray9 = <?php echo json_encode($array9); ?>;
+        var darray1  = <?php echo json_encode($array1);  ?>;
+        var darray2  = <?php echo json_encode($array2);  ?>;
+        var darray3  = <?php echo json_encode($array3);  ?>;
+        var darray4  = <?php echo json_encode($array4);  ?>;
+        var darray5  = <?php echo json_encode($array5);  ?>;
+        var darray6  = <?php echo json_encode($array6);  ?>;
+        var darray7  = <?php echo json_encode($array7);  ?>;
+        var darray8  = <?php echo json_encode($array8);  ?>;
+        var darray9  = <?php echo json_encode($array9);  ?>;
         var darray10 = <?php echo json_encode($array10); ?>;
         var darray11 = <?php echo json_encode($array11); ?>;
         var darray12 = <?php echo json_encode($array12); ?>;
@@ -388,23 +333,23 @@ sqlsrv_free_stmt($stmt);
             }
         });
 
-        // Filtrar los resultados
+        // Filtrar los resultados en el cliente
         $('#filtroForm').on('submit', function (e) {
             e.preventDefault();
 
-            var nombre = $('#nombre').val();
+            var nombre      = $('#nombre').val().toLowerCase();
             var fechaInicio = $('#fecha_inicial').val();
-            var fechaFinal = $('#fecha_final').val();
+            var fechaFinal  = $('#fecha_final').val();
 
             var dataSet = [];
 
             for (var i = 0; i < darray1.length; i++) {
-                // Filtrar por nombre y fechas
-                if (
-                    (darray1[i].toLowerCase().includes(nombre.toLowerCase())) &&
-                    (fechaInicio === "" || darray8[i] >= fechaInicio) &&
-                    (fechaFinal === "" || darray8[i] <= fechaFinal)
-                ) {
+                var nombreMatch  = !nombre || darray1[i].toLowerCase().includes(nombre);
+                var fechaStr     = darray8[i] ? darray8[i].substring(0, 10) : '';
+                var fechaDesde   = !fechaInicio || fechaStr >= fechaInicio;
+                var fechaHasta   = !fechaFinal  || fechaStr <= fechaFinal;
+
+                if (nombreMatch && fechaDesde && fechaHasta) {
                     dataSet.push([
                         darray1[i],
                         darray2[i],

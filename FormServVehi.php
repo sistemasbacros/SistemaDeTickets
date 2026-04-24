@@ -5,128 +5,125 @@
  *
  * @description
  * Formulario para reportar solicitudes de mantenimiento vehicular.
- * Genera automáticamente un ID de ticket único combinando un contador
- * secuencial con un código aleatorio.
+ * El ID de ticket es generado en el frontend con JavaScript (mismo algoritmo
+ * que el original: contador + código aleatorio + segundos).
  *
- * Características:
- * - Conexión directa a SQL Server
- * - Generación automática de ID de ticket
- * - Función de sanitización de inputs (test_input)
- * - Inserta en tabla TMANVEHI
- *
- * Algoritmo de generación de ID:
- * 1. Consulta COUNT(*) + 1 de TMANVEHI
- * 2. Genera uniqid() y extrae últimos 2 caracteres
- * 3. Añade segundos actuales
- * 4. Formato final: {contador}_{otp}{segundos}
- *
- * @module Módulo de Mantenimiento Vehicular
- * @access Público (sin autenticación)
- *
- * @dependencies
- * - PHP: sqlsrv extension, date functions
- *
- * @database
- * - Servidor: DESAROLLO-BACRO\SQLEXPRESS
- * - Base de datos: Ticket
- * - Tabla: TMANVEHI (INSERT)
- *
- * @functions
- * - test_input($data): Sanitiza datos de entrada
- *   Aplica: trim, stripslashes, htmlspecialchars
- *
- * @security
- * - Sanitización de inputs con htmlspecialchars
- * - ADVERTENCIA: Sin autenticación de sesión
- * - die() expone errores de SQL
+ * Migrado a Rust API:
+ * - POST /api/TicketBacros/vehiculos  → inserta en TMANVEHI
+ *   (el conteo para generar el ID se obtiene también de la API)
  *
  * @author Equipo Tecnología BacroCorp
- * @version 1.5
+ * @version 2.0
  * @since 2024
  */
 
-// ----------------- CONEXIÓN Y PROCESAMIENTO DEL FORMULARIO -----------------
 require_once __DIR__ . '/config.php';
-$serverName = $DB_SERVER;
-$connectionInfo = array(
-    "Database" => $DB_DATABASE,
-    "UID" => $DB_USERNAME,
-    "PWD" => $DB_PASSWORD,
-    "CharacterSet" => "UTF-8",
-    "TrustServerCertificate" => true,
-    "Encrypt" => true
-);
-$conn = sqlsrv_connect($serverName, $connectionInfo);
-if (!$conn) {
-    die("Error de conexión: " . print_r(sqlsrv_errors(), true));
-}
+$apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
 
 function test_input($data) {
     return htmlspecialchars(stripslashes(trim($data)));
 }
 
-// Generar ID automático
-$sqlIDT = "SELECT COUNT(*) + 1 AS Total FROM TMANVEHI";
-$stmtIDT = sqlsrv_query($conn, $sqlIDT);
-$row = sqlsrv_fetch_array($stmtIDT, SQLSRV_FETCH_ASSOC);
-$newID = $row['Total'] ?? 1;
+// Obtener conteo actual de registros para generar el ID de ticket
+// (mismo algoritmo que el original: COUNT(*) + 1)
+$totalRecords = 1;
+$ch = curl_init($apiUrl . '/api/TicketBacros/vehiculos');
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT        => 10,
+    CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+]);
+$resp     = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+if ($httpCode === 200 && $resp) {
+    $data = json_decode($resp, true);
+    if (is_array($data)) {
+        $totalRecords = count($data) + 1;
+    }
+}
 
-$number = uniqid();
-$varray = str_split($number);
-$otp = implode('', array_slice($varray, -2));
-$ticketID = $newID . '_' . $otp . date("s");
+// Generar ID con el mismo algoritmo que el PHP original
+$number   = uniqid();
+$varray   = str_split($number);
+$otp      = implode('', array_slice($varray, -2));
+$ticketID = $totalRecords . '_' . $otp . date("s");
 
+// Procesar formulario POST
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $placas       = test_input($_POST["placas"]);
-    $problema     = test_input($_POST["incidencia"]);
-    $prioridad    = test_input($_POST["prioridad"]);
-    $fecha        = test_input($_POST["fecha"]);
-    $nombre       = test_input($_POST["nombre"]);
-    $departamento = test_input($_POST["departamento"]);
-    $comentarios  = test_input($_POST["mensaje"]);
-    $id           = test_input($_POST["id"]);
+    $placas       = test_input($_POST["placas"]       ?? '');
+    $problema     = test_input($_POST["incidencia"]   ?? '');
+    $prioridad    = test_input($_POST["prioridad"]    ?? '');
+    $fecha        = test_input($_POST["fecha"]        ?? '');
+    $nombre       = test_input($_POST["nombre"]       ?? '');
+    $departamento = test_input($_POST["departamento"] ?? '');
+    $comentarios  = test_input($_POST["mensaje"]      ?? '');
+    $id           = test_input($_POST["id"]           ?? $ticketID);
 
-    // Subida de imágenes
+    // Subida de imágenes (se mantiene local, igual que antes)
     $uploadDir = 'uploads/';
     if (!file_exists($uploadDir)) {
         mkdir($uploadDir, 0777, true);
     }
 
     $uploadedFiles = [];
-
     if (!empty($_FILES['evidencias']['name'][0])) {
         foreach ($_FILES['evidencias']['tmp_name'] as $index => $tmpName) {
-            $fileName = basename($_FILES['evidencias']['name'][$index]);
+            $fileName  = basename($_FILES['evidencias']['name'][$index]);
             $sanitized = preg_replace("/[^a-zA-Z0-9._-]/", "_", $fileName);
             $targetPath = $uploadDir . time() . '_' . $sanitized;
-
-            $fileType = strtolower(pathinfo($targetPath, PATHINFO_EXTENSION));
+            $fileType   = strtolower(pathinfo($targetPath, PATHINFO_EXTENSION));
             $allowedTypes = ['jpg', 'jpeg', 'png'];
-
-            if (in_array($fileType, $allowedTypes)) {
-                if (move_uploaded_file($tmpName, $targetPath)) {
-                    $uploadedFiles[] = $targetPath;
-                }
+            if (in_array($fileType, $allowedTypes) && move_uploaded_file($tmpName, $targetPath)) {
+                $uploadedFiles[] = $targetPath;
             }
         }
     }
-
     $evidenciasDB = implode(',', $uploadedFiles);
 
-    $sql = "INSERT INTO TMANVEHI 
-        (PLACAS, PROBLEMA, PRIORIDAD, FECHA, NOMBRE, ASIGNADO, IDT, COMENTARIOS, Departamento, EVIDENCIAS) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    $params = [$placas, $problema, $prioridad, $fecha, $nombre, '', $id, $comentarios, $departamento, $evidenciasDB];
+    // Enviar a la API Rust
+    $payload = json_encode([
+        'placas'       => $placas,
+        'problema'     => $problema,
+        'prioridad'    => $prioridad,
+        'fecha'        => $fecha,
+        'nombre'       => $nombre,
+        'asignado'     => '',
+        'idt'          => $id,
+        'comentarios'  => $comentarios,
+        'departamento' => $departamento,
+        'evidencias'   => $evidenciasDB,
+    ]);
 
-    $stmt = sqlsrv_query($conn, $sql, $params);
-    if ($stmt === false) {
-        die(print_r(sqlsrv_errors(), true));
+    $ch = curl_init($apiUrl . '/api/TicketBacros/vehiculos');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'Accept: application/json',
+        ],
+    ]);
+    $resp     = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr  = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlErr || ($httpCode !== 200 && $httpCode !== 201)) {
+        $errorMsg = $curlErr ?: "Error HTTP $httpCode";
+        error_log("API error al crear ticket vehicular: $errorMsg — $resp");
+        echo "<script>
+            alert('Error al guardar el ticket. Por favor intenta de nuevo.');
+            window.history.back();
+        </script>";
+    } else {
+        echo "<script>
+            alert('Ticket guardado correctamente.');
+            window.location.href = 'index.php';
+        </script>";
     }
-
-    echo "<script>
-        alert('Ticket guardado correctamente.');
-        window.location.href = 'index.php';
-    </script>";
     exit();
 }
 ?>

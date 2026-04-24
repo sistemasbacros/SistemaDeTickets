@@ -187,74 +187,69 @@ $reemplazos = [
 ];
 
 // Función para determinar el responsable final basado en carga de trabajo
+// Consulta la API Rust en lugar de conectarse directamente a SQL Server.
 function determinarResponsableFinal($responsable_principal, $subtipo) {
     global $reemplazos;
-    
+
     // Para casos de múltiples responsables (ej: "Alfredo / Ariel")
     if (strpos($responsable_principal, '/') !== false) {
         $responsables = array_map('trim', explode('/', $responsable_principal));
         $responsable_principal = $responsables[0]; // Tomar el primero como principal
     }
-    
-    // Conectar a la base de datos para verificar carga de trabajo
-    require_once __DIR__ . '/config.php';
-    $connectionInfo = array(
-        "Database" => $DB_DATABASE,
-        "UID"      => $DB_USERNAME,
-        "PWD"      => $DB_PASSWORD,
-        "CharacterSet" => "UTF-8",
-        "TrustServerCertificate" => true,
-        "Encrypt" => true
-    );
-    $conn = sqlsrv_connect($DB_SERVER, $connectionInfo);
 
-    if ($conn) {
-        // Contar tickets en proceso del responsable principal
-        $sql = "SELECT COUNT(*) as total FROM T3 WHERE PA = ? AND Estatus = 'En proceso'";
-        $params = array($responsable_principal);
-        $stmt = sqlsrv_query($conn, $sql, $params);
-        
-        if ($stmt) {
-            $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
-            $tickets_en_proceso = $row['total'];
-            
-            // Si tiene más de 5 tickets en proceso, asignar al reemplazo
-            if ($tickets_en_proceso >= 5) {
-                $reemplazo = isset($reemplazos[$responsable_principal]) ? $reemplazos[$responsable_principal] : $responsable_principal;
-                
-                // Verificar si el reemplazo también tiene muchos tickets
-                $sql_reemplazo = "SELECT COUNT(*) as total FROM T3 WHERE PA = ? AND Estatus = 'En proceso'";
-                $params_reemplazo = array($reemplazo);
-                $stmt_reemplazo = sqlsrv_query($conn, $sql_reemplazo, $params_reemplazo);
-                
-                if ($stmt_reemplazo) {
-                    $row_reemplazo = sqlsrv_fetch_array($stmt_reemplazo, SQLSRV_FETCH_ASSOC);
-                    $tickets_reemplazo = $row_reemplazo['total'];
-                    
-                    // Si el reemplazo ya atendió al menos 1 ticket, regresar al principal
-                    if ($tickets_reemplazo > 0) {
-                        sqlsrv_free_stmt($stmt_reemplazo);
-                        sqlsrv_free_stmt($stmt);
-                        sqlsrv_close($conn);
-                        return $responsable_principal;
+    $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
+
+    // Cuenta tickets "En proceso" del responsable principal via API
+    $contarTicketsEnProceso = function($pa) use ($apiUrl) {
+        $url = $apiUrl . '/api/TicketBacros/tickets?pa=' . urlencode($pa) . '&estatus=' . urlencode('En proceso');
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+        $resp = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($resp && $status === 200) {
+            $data = json_decode($resp, true);
+            // La API devuelve { "total": N, "data": [...] }
+            if (isset($data['total'])) {
+                return (int)$data['total'];
+            }
+            if (isset($data['data']) && is_array($data['data'])) {
+                // Filtrar en PHP por PA si la API no soporta el filtro por pa
+                $count = 0;
+                foreach ($data['data'] as $ticket) {
+                    $ticket_pa = $ticket['pa'] ?? $ticket['PA'] ?? '';
+                    $ticket_estatus = $ticket['estatus'] ?? $ticket['Estatus'] ?? '';
+                    if (strcasecmp(trim($ticket_pa), trim($pa)) === 0
+                        && strcasecmp(trim($ticket_estatus), 'En proceso') === 0) {
+                        $count++;
                     }
                 }
-                
-                sqlsrv_free_stmt($stmt_reemplazo);
-                sqlsrv_free_stmt($stmt);
-                sqlsrv_close($conn);
-                return $reemplazo;
+                return $count;
             }
-            
-            sqlsrv_free_stmt($stmt);
-            sqlsrv_close($conn);
+        }
+        return 0; // En caso de error asumir sin carga
+    };
+
+    $tickets_en_proceso = $contarTicketsEnProceso($responsable_principal);
+
+    // Si tiene 5 o más tickets en proceso, intentar asignar al reemplazo
+    if ($tickets_en_proceso >= 5) {
+        $reemplazo = isset($reemplazos[$responsable_principal])
+            ? $reemplazos[$responsable_principal]
+            : $responsable_principal;
+
+        $tickets_reemplazo = $contarTicketsEnProceso($reemplazo);
+
+        // Si el reemplazo ya tiene al menos 1 ticket, regresar al principal
+        if ($tickets_reemplazo > 0) {
             return $responsable_principal;
         }
-        
-        sqlsrv_close($conn);
+
+        return $reemplazo;
     }
-    
-    // Si hay error de conexión, devolver el responsable principal
+
     return $responsable_principal;
 }
 
@@ -2044,15 +2039,15 @@ function obtenerEmailResponsable($responsable) {
     // Escuchar eventos de envío completado (desde PHP)
     <?php if ($_SERVER["REQUEST_METHOD"] == "POST"): ?>
     window.onload = function() {
-      <?php if (isset($stmt) && $stmt !== false): ?>
+      <?php if (!empty($api_ok)): ?>
       // Ocultar modal de procesamiento
       hideProcessingModal();
-      
+
       // Mostrar resultado
       <?php
       if (isset($emailResults)) {
-        showSuccessAlert($name1, $name2, $name10, $persona_asignada, 
-          $emailResults['user'], $emailResults['admin'], $emailResults['responsable'], 
+        showSuccessAlert($name1, $name2, $name10, $persona_asignada,
+          $emailResults['user'], $emailResults['admin'], $emailResults['responsable'],
           $imagen_nombre ?? '', $clasificacion ?? '', $subtipo ?? '');
       }
       ?>
@@ -2122,70 +2117,68 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $clasificacion = test_input($_POST["tipo"]);
   $subtipo = test_input($_POST["subtipo"]);
   
-  // Determinar responsable final basado en carga de trabajo
-  $responsable_principal = isset($tipo_opciones[$clasificacion][$subtipo]['responsable']) 
-    ? $tipo_opciones[$clasificacion][$subtipo]['responsable'] 
+  // Determinar responsable final basado en carga de trabajo (via API)
+  $responsable_principal = isset($tipo_opciones[$clasificacion][$subtipo]['responsable'])
+    ? $tipo_opciones[$clasificacion][$subtipo]['responsable']
     : 'Ariel';
-  
-  $persona_asignada = determinarResponsableFinal($responsable_principal, $subtipo);
-  
-  // Obtener fecha y hora actual con formato para SQL Server
-  $fecha_actual = date('Y-m-d');
-  $hora_actual_completa = date('Y-m-d H:i:s') . '.0000000'; // Formato: 2026-02-17 11:45:51.0000000
-  
-  // Insertar en la base de datos con estatus "En proceso", persona asignada y fecha/hora de proceso
-  $connectionInfo = array(
-    "Database" => $DB_DATABASE,
-    "UID"      => $DB_USERNAME,
-    "PWD"      => $DB_PASSWORD,
-    "CharacterSet" => "UTF-8",
-    "TrustServerCertificate" => true,
-    "Encrypt" => true
-  );
-  $conn = sqlsrv_connect($DB_SERVER, $connectionInfo);
 
-  if ($conn) {
-    $sql = "INSERT INTO T3 (
-      [Nombre],[Correo],[Prioridad],[Empresa],[Asunto],[Mensaje],[Adjuntos],
-      [Fecha],[Hora],[Id_Ticket],[Estatus],[PA],[imagen_url],[imagen_nombre],[imagen_tipo],[imagen_size],[Clasificacion],
-      [FechaEnProceso],[HoraEnProceso]
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En proceso', ?, ?, ?, ?, ?, ?, ?, ?)";
-    
-    $params = array(
-      $name1, $name2, $name3, $name4, $name5, $name6, $name7, 
-      $name8, $name9, $name10, $persona_asignada, $imagen_url, $imagen_nombre, $imagen_tipo, $imagen_size, $clasificacion,
-      $fecha_actual, $hora_actual_completa
-    );
-    
-    $stmt = sqlsrv_query($conn, $sql, $params);
-    
-    if ($stmt === false) {
-      error_log("Error en la base de datos: " . print_r(sqlsrv_errors(), true));
-      showErrorAlert("Error al guardar el ticket en la base de datos.");
-    } else {
-      sqlsrv_free_stmt($stmt);
-      
-      // Enviar correos de notificación
-      $emailResults = sendNotificationEmails(
-        $name1, $name2, $name3, $name4, $name5, $name6, $name7, 
-        $name8, $name9, $name10, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo
-      );
-      
-      if ($emailResults['user'] && $emailResults['admin'] && $emailResults['responsable']) {
-        showSuccessAlert($name1, $name2, $name10, $persona_asignada, true, true, true, $imagen_nombre, $clasificacion, $subtipo);
-      } elseif ($emailResults['user'] || $emailResults['admin'] || $emailResults['responsable']) {
-        showSuccessAlert($name1, $name2, $name10, $persona_asignada, 
-          $emailResults['user'], $emailResults['admin'], $emailResults['responsable'], 
-          $imagen_nombre, $clasificacion, $subtipo);
-      } else {
-        showWarningAlert($name10, "No se pudieron enviar los correos de notificación.");
-      }
-    }
-    
-    sqlsrv_close($conn);
+  $persona_asignada = determinarResponsableFinal($responsable_principal, $subtipo);
+
+  // ── Llamada a la API Rust en lugar de sqlsrv directo ──────────────────────
+  $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
+
+  $api_payload = json_encode([
+    'Nombre'    => $name1,
+    'Correo'    => $name2,
+    'Prioridad' => $name3,
+    'Empresa'   => $name4,
+    'Asunto'    => $name5,
+    'Mensaje'   => $name6,
+    'Adjuntos'  => $name7,
+    'Fecha'     => $name8,
+    'Hora'      => $name9,
+    'Id_Ticket' => $name10,
+  ]);
+
+  $ch = curl_init($apiUrl . '/api/TicketBacros/tickets');
+  curl_setopt($ch, CURLOPT_POST, true);
+  curl_setopt($ch, CURLOPT_POSTFIELDS, $api_payload);
+  curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+  $api_response   = curl_exec($ch);
+  $http_status    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  $curl_error     = curl_error($ch);
+  curl_close($ch);
+
+  $api_ok = false;
+
+  if ($curl_error) {
+    error_log("Error cURL al crear ticket TI (FormTic1): " . $curl_error);
+    showErrorAlert("Error de comunicación con el sistema de tickets. Intente nuevamente.");
+  } elseif ($http_status < 200 || $http_status >= 300) {
+    $decoded = json_decode($api_response, true);
+    $api_msg = isset($decoded['message']) ? $decoded['message'] : "Error HTTP $http_status";
+    error_log("API error al crear ticket TI: HTTP $http_status — $api_response");
+    showErrorAlert("Error al guardar el ticket: " . htmlspecialchars($api_msg));
   } else {
-    error_log("Error de conexión a la base de datos: " . print_r(sqlsrv_errors(), true));
-    showErrorAlert("Error de conexión a la base de datos.");
+    $api_ok = true;
+
+    // Enviar correos de notificación (lógica PHPMailer intacta)
+    $emailResults = sendNotificationEmails(
+      $name1, $name2, $name3, $name4, $name5, $name6, $name7,
+      $name8, $name9, $name10, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo
+    );
+
+    if ($emailResults['user'] && $emailResults['admin'] && $emailResults['responsable']) {
+      showSuccessAlert($name1, $name2, $name10, $persona_asignada, true, true, true, $imagen_nombre, $clasificacion, $subtipo);
+    } elseif ($emailResults['user'] || $emailResults['admin'] || $emailResults['responsable']) {
+      showSuccessAlert($name1, $name2, $name10, $persona_asignada,
+        $emailResults['user'], $emailResults['admin'], $emailResults['responsable'],
+        $imagen_nombre, $clasificacion, $subtipo);
+    } else {
+      showWarningAlert($name10, "No se pudieron enviar los correos de notificación.");
+    }
   }
 }
 
@@ -2213,16 +2206,9 @@ function sendNotificationEmails($name, $email, $priority, $department, $subject,
 function sendUserConfirmationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo) {
   try {
     $mail = new PHPMailer(true);
-    
-    $mail->isSMTP();
-    $mail->Host = 'smtp.office365.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = 'tickets@bacrocorp.com';
-    $mail->Password = 'XTqzA0GkA#';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-    $mail->CharSet = 'UTF-8';
-    
+
+    configurarSMTP($mail);
+
     $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
     $mail->addAddress($email, $name);
     
@@ -2242,16 +2228,9 @@ function sendUserConfirmationEmail($name, $email, $priority, $department, $subje
 function sendAdminNotificationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo) {
   try {
     $mail = new PHPMailer(true);
-    
-    $mail->isSMTP();
-    $mail->Host = 'smtp.office365.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = 'tickets@bacrocorp.com';
-    $mail->Password = 'XTqzA0GkA#';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-    $mail->CharSet = 'UTF-8';
-    
+
+    configurarSMTP($mail);
+
     $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
     $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
     
@@ -2271,18 +2250,11 @@ function sendAdminNotificationEmail($name, $email, $priority, $department, $subj
 function sendResponsableNotificationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo) {
   try {
     $mail = new PHPMailer(true);
-    
-    $mail->isSMTP();
-    $mail->Host = 'smtp.office365.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = 'tickets@bacrocorp.com';
-    $mail->Password = 'XTqzA0GkA#';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-    $mail->CharSet = 'UTF-8';
-    
+
+    configurarSMTP($mail);
+
     $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
-    
+
     // Obtener el correo del responsable
     $email_responsable = obtenerEmailResponsable($persona_asignada);
     $mail->addAddress($email_responsable, $persona_asignada);
