@@ -14,10 +14,11 @@ Reemplaza ese hostname por el real en cada paso.
 - Cuenta Cloudflare con acceso al dominio.
 - Acceso RDP / consola al servidor para configurar firewall del SO.
 
-> ⚠️ **NO continúes sin completar el Bloque B del checklist (backend Rust)** si tu modelo
-> de amenaza incluye atacantes con LAN access o que puedan descubrir tu IP de origen.
-> El frontend está blindado, pero el backend en `0.0.0.0:3000` con `CorsLayer::permissive()`
-> sigue siendo una superficie significativa.
+> ✅ **Backend Rust ya endurecido** (branch `security/wave3-hardening`):
+> CORS por allowlist, JWT_SECRET sin fallback, body limit 10 MB, validación
+> server-side de tokens de firma, JWT requerido en endpoints internos
+> (`/personal`, `/contactos`, `/auth/profile`, `/auth/verify`,
+> `/snipeit/resguardo/:id`). Aun así, el firewall del paso 3 es indispensable.
 
 ---
 
@@ -357,13 +358,17 @@ Si algo se rompe en producción:
 ## Estado de tareas pendientes que NO cubre este runbook
 
 - [x] ~~Backend Rust — fallback de JWT, CORS, body limit~~ — **HECHO** (Wave 3).
-- [ ] **Backend Rust — JWT middleware en endpoints internos** (`/personal`, `/contactos`,
-      `/auth/profile`, `/auth/verify`, `/snipeit/resguardo/:id`). Aún reachable sin auth.
-      Mitigado a nivel red por el firewall del paso 3 + el binding del proceso.
+- [x] ~~Backend Rust — JWT middleware en endpoints internos~~ — **HECHO** (Wave 4).
+      `/personal`, `/contactos`, `/auth/profile`, `/auth/verify`,
+      `/snipeit/resguardo/:id` ahora exigen Bearer JWT.
+- [x] ~~Validación server-side de tokens de firma~~ — **HECHO** (Opción B).
+      `FirmarLiberacion.php` y `FirmarSolicitudBaja.php` validan ANTES de
+      renderizar: existencia, estatus=Pendiente, turno correcto, folio match.
 - [ ] **`JWT_SECRET` en `.env` de prod** — DEBE ser un valor real de 64+ chars random.
-      Generar con `openssl rand -hex 64` y poner en el `.env` ANTES de re-deployar.
-      La API ahora rechaza arrancar con placeholders (`CAMBIA_ESTE_SECRET_EN_PRODUCCION`,
-      `dev_secret_key`, etc.).
+      Generar con `openssl rand -hex 64` (Linux/Git Bash) o el equivalente en
+      PowerShell, y poner en el `.env` ANTES de re-deployar.
+      La API rechaza arrancar con placeholders (`CAMBIA_ESTE_SECRET_EN_PRODUCCION`,
+      `dev_secret_key`, `default_secret`, `your_super_secret_*`, etc.).
 - [ ] **`ALLOWED_ORIGINS` en `.env` de prod** — debe contener la URL pública del PHP, p.ej.
       `ALLOWED_ORIGINS=https://tickets.bacrocorp.com`. Sin esto, la API solo acepta
       `http://localhost:8006` y los XHR de producción fallarán.
