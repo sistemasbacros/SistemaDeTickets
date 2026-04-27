@@ -7,8 +7,89 @@
  * Carga datos del firmante via GET /api/TicketBacros/solicitud-baja/firmar/{token}
  * Muestra conceptos del departamento, canvas de firma, y envia POST para firmar/rechazar.
  */
+require_once __DIR__ . '/auth_check.php';
+
+// Token format guard — reject malformed tokens early so probes can't fingerprint the page.
+$rawToken = $_GET['token'] ?? '';
+if (!is_string($rawToken) || $rawToken === '' || strlen($rawToken) > 256
+    || !preg_match('/^[A-Za-z0-9_\-\.]+$/', $rawToken)) {
+    http_response_code(400);
+    @error_log(sprintf(
+        'TOKEN_REJECT script=%s ip=%s user=%s len=%d',
+        basename($_SERVER['SCRIPT_NAME'] ?? '-'),
+        $_SERVER['REMOTE_ADDR']     ?? '-',
+        $_SESSION['user_username']  ?? '-',
+        is_string($rawToken) ? strlen($rawToken) : 0
+    ));
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Token inválido</title>';
+    echo '<h1>Token inválido</h1>';
+    echo '<p>El enlace de firma que abriste no es válido. Si llegaste aquí desde un correo, vuelve al mensaje original y haz clic de nuevo. Si el problema persiste, contacta al administrador.</p>';
+    echo '<p><a href="IniSoport.php">Volver al inicio</a></p>';
+    exit;
+}
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/api_client.php';
+
+// ─── Validación server-side del token ANTES de renderizar la página ───────
+// Aprovecha el endpoint EXISTENTE GET /solicitud-baja/firmar/:token, que
+// devuelve la vista del firmante (sin tokens de otros firmantes).
+$validation = api_call(
+    'GET',
+    '/api/TicketBacros/solicitud-baja/firmar/' . urlencode($rawToken)
+);
+
+if ($validation['http'] === 404) {
+    http_response_code(404);
+    @error_log("FIRMAR_BAJA_REJECT reason=token_not_found token_len=" . strlen($rawToken)
+             . " ip=" . ($_SERVER['REMOTE_ADDR'] ?? '-'));
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Enlace no encontrado</title>';
+    echo '<h1>Enlace de firma no encontrado</h1>';
+    echo '<p>La solicitud de baja no existe o ya fue eliminada.</p>';
+    echo '<p><a href="IniSoport.php">Volver al inicio</a></p>';
+    exit;
+}
+
+if ($validation['http'] === 400 || $validation['http'] === 422) {
+    $msg = $validation['json']['message'] ?? $validation['json']['error'] ?? 'Token inválido';
+    http_response_code(410);
+    @error_log("FIRMAR_BAJA_REJECT reason=token_invalid msg=" . substr($msg, 0, 100)
+             . " ip=" . ($_SERVER['REMOTE_ADDR'] ?? '-'));
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Enlace ya usado o no es turno</title>';
+    echo '<h1>Este enlace ya fue usado o aún no es tu turno de firmar</h1>';
+    echo '<p>' . htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') . '</p>';
+    echo '<p><a href="IniSoport.php">Volver al inicio</a></p>';
+    exit;
+}
+
+if (!$validation['ok']) {
+    http_response_code(503);
+    @error_log("FIRMAR_BAJA_REJECT reason=api_error http=" . $validation['http']
+             . " err=" . substr($validation['error'] ?? '-', 0, 100)
+             . " ip=" . ($_SERVER['REMOTE_ADDR'] ?? '-'));
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Servicio no disponible</title>';
+    echo '<h1>Servicio temporalmente no disponible</h1>';
+    echo '<p>Inténtalo de nuevo en unos minutos.</p>';
+    exit;
+}
+
+// Validación OK — exponemos metadata para que el JS la pueda usar
+// (aunque hoy el JS recarga la misma URL, dejarla aquí ahorra una llamada).
+$tokenMeta = $validation['json']['data'] ?? [];
+
+// Si el firmante ya firmó/rechazó, mostrar mensaje informativo en lugar de
+// la página de firma. (Defensa en profundidad: el front también lo maneja.)
+$firmanteEstatus = $tokenMeta['firmante_estatus'] ?? 'Pendiente';
+if ($firmanteEstatus === 'Firmado' || $firmanteEstatus === 'Rechazado') {
+    @error_log("FIRMAR_BAJA_REJECT reason=already_signed estatus=$firmanteEstatus"
+             . " ip=" . ($_SERVER['REMOTE_ADDR'] ?? '-'));
+    // Dejamos que el HTML normal se renderice — el JS detectará el estatus
+    // y mostrará el mensaje apropiado. Solo loggeamos.
+}
 
 function getApiUrl(): string {
     $url = getenv('PDF_API_URL') ?: '';

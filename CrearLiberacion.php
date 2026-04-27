@@ -7,6 +7,7 @@
  * El API genera el folio y envía email al primer firmante.
  */
 
+require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
 
 // ── Resolver URL del API (igual que FormNuevoUsuario.php) ─────────────────────

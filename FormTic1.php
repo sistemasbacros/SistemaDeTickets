@@ -55,9 +55,15 @@
  * @since 2024
  * @updated 2025-01-20
  */
+require_once __DIR__ . '/auth_check.php';
 
 // INICIO DE SESIÓN Y VERIFICACIÓN
-session_start();
+// NOTE: auth_check.php already starts the session and validates authentication
+// using a stricter set of checks. The legacy block below is kept defensively
+// but will normally be a no-op (auth_check would have redirected otherwise).
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Verificar si el usuario está autenticado
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
@@ -2078,28 +2084,77 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $imagen_tipo = '';
   $imagen_size = 0;
   
-  if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] == UPLOAD_ERR_OK) {
-    $file_tmp = $_FILES['imagen']['tmp_name'];
-    $file_name = basename($_FILES['imagen']['name']);
-    $file_type = $_FILES['imagen']['type'];
-    $file_size = $_FILES['imagen']['size'];
-    
-    if ($file_size <= 5 * 1024 * 1024) {
-      $allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-      if (in_array($file_type, $allowed_types)) {
-        if (getimagesize($file_tmp)) {
-          $file_ext = pathinfo($file_name, PATHINFO_EXTENSION);
-          $unique_name = 'ticket_' . time() . '_' . uniqid() . '.' . $file_ext;
-          $destination = '../uploads/' . $unique_name;
-          
-          if (move_uploaded_file($file_tmp, $destination)) {
-            $imagen_url = $destination;
-            $imagen_nombre = $file_name;
-            $imagen_tipo = $file_type;
-            $imagen_size = $file_size;
+  if (isset($_FILES['imagen'])) {
+    $self_log = basename(__FILE__);
+    $ip_log   = $_SERVER['REMOTE_ADDR'] ?? '-';
+
+    if ($_FILES['imagen']['error'] !== UPLOAD_ERR_OK) {
+      // Si el usuario sólo "tocó" el campo sin subir nada, ignoramos.
+      if ($_FILES['imagen']['error'] !== UPLOAD_ERR_NO_FILE) {
+        error_log("UPLOAD reject ip={$ip_log} script={$self_log} reason=upload_err code={$_FILES['imagen']['error']}");
+      }
+    } else {
+      $file_tmp  = $_FILES['imagen']['tmp_name'];
+      $file_size = (int) $_FILES['imagen']['size'];
+      $maxSize   = 5 * 1024 * 1024; // 5 MB
+
+      $accepted = false;
+
+      if ($file_size <= 0 || $file_size > $maxSize) {
+        error_log("UPLOAD reject ip={$ip_log} script={$self_log} reason=size size={$file_size}");
+      } else {
+        // Validar contenido real (NO confiar en $_FILES[...]['type'])
+        $info = @getimagesize($file_tmp);
+        if ($info === false || empty($info['mime'])) {
+          error_log("UPLOAD reject ip={$ip_log} script={$self_log} reason=not_image");
+        } else {
+          $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+          if (!in_array($info['mime'], $allowedMimes, true)) {
+            error_log("UPLOAD reject ip={$ip_log} script={$self_log} reason=mime mime={$info['mime']}");
+          } else {
+            $ext = match ($info['mime']) {
+              'image/jpeg' => 'jpg',
+              'image/png'  => 'png',
+              'image/gif'  => 'gif',
+              'image/webp' => 'webp',
+            };
+
+            // Nombre nuevo aleatorio: nunca usar basename($_FILES[...]['name'])
+            $safeName = bin2hex(random_bytes(16)) . '.' . $ext;
+
+            // Anclar a uploads/ (el directorio vive en el padre del webroot del contenedor)
+            $base = realpath(__DIR__ . '/../uploads');
+            if ($base === false) {
+              error_log("UPLOAD reject ip={$ip_log} script={$self_log} reason=no_upload_dir");
+            } else {
+              $destPath = $base . DIRECTORY_SEPARATOR . $safeName;
+
+              if (!move_uploaded_file($file_tmp, $destPath)) {
+                error_log("UPLOAD reject ip={$ip_log} script={$self_log} reason=move_failed");
+              } else {
+                // Defensa anti path-traversal: confirmar que el archivo quedó dentro de $base
+                $resolved = realpath($destPath);
+                if ($resolved === false || strpos($resolved, $base . DIRECTORY_SEPARATOR) !== 0) {
+                  @unlink($destPath);
+                  error_log("UPLOAD reject ip={$ip_log} script={$self_log} reason=path_escape");
+                } else {
+                  @chmod($destPath, 0644);
+
+                  // Mantener compatibilidad con el resto del flujo: ruta relativa
+                  $imagen_url    = '../uploads/' . $safeName;
+                  $imagen_nombre = $safeName;
+                  $imagen_tipo   = $info['mime'];
+                  $imagen_size   = $file_size;
+                  $accepted      = true;
+
+                  error_log("UPLOAD ok ip={$ip_log} script={$self_log} file={$safeName} size={$file_size} mime={$info['mime']}");
+                }
+              }
+            }
           }
         }
       }
+      unset($accepted);
     }
   }
   

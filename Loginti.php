@@ -3,13 +3,21 @@
 if (ob_get_level()) ob_end_clean();
 ob_start();
 
-// ACTIVAR TODOS LOS ERRORES PARA DEBUGGING
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+// Errors solo en dev. En produccion el php-fpm ya tiene display_errors=Off via custom.ini.
+$IS_DEV = (getenv('APP_ENV') === 'development' || getenv('APP_ENV') === 'dev');
+if ($IS_DEV) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+} else {
+    ini_set('display_errors', 0);
+    error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED);
+}
+
+require_once __DIR__ . '/login_rate_limit.php';
 
 // CONFIGURACIÓN DE SESIÓN SEGURA ANTES DE session_start()
 ini_set('session.cookie_httponly', 1);
-ini_set('session.cookie_secure', 0); // Cambiar a 1 si usas HTTPS
+ini_set('session.cookie_secure', 1); // HTTPS forzado por Cloudflare/nginx
 ini_set('session.use_strict_mode', 1);
 ini_set('session.cookie_samesite', 'Strict');
 ini_set('session.use_only_cookies', 1);
@@ -98,9 +106,14 @@ if (isset($_GET['error']) && $_GET['error'] === 'session_expired') {
 
 // Procesar login si se envió el formulario
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($_POST['contrasena'])) {
-    
-    // VERIFICAR TOKEN CSRF
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+
+    // RATE LIMIT POR IP (defense-in-depth ante Cloudflare)
+    [$throttled, $secondsLeft] = login_throttle_check();
+    if ($throttled) {
+        $loginError = 'Demasiados intentos fallidos. Intenta de nuevo en '
+                    . max(1, (int)ceil($secondsLeft / 60)) . ' minutos.';
+    } else if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        // VERIFICAR TOKEN CSRF
         $loginError = 'Error de seguridad. Por favor, recarga la página e intenta nuevamente.';
         $debugInfo[] = "❌ Error CSRF: Token inválido";
     } else {
@@ -148,6 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
 
                 if ($apiHttpCode === 200 && !empty($apiData['token'])) {
                     $debugInfo[] = "✅ Login exitoso, JWT obtenido";
+                    login_throttle_clear();
 
                     $token = $apiData['token'];
 
@@ -198,6 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                     exit();
 
                 } elseif ($apiHttpCode === 401 || $apiHttpCode === 403) {
+                    login_throttle_register_failure();
                     $loginError = 'Usuario o contraseña incorrectos';
                     $debugInfo[] = "❌ Credenciales inválidas (HTTP " . $apiHttpCode . ")";
                 } else {
@@ -1191,8 +1206,8 @@ ob_end_flush();
                 </div>
             </form>
 
-            <!-- Información de debug -->
-            <?php if (!empty($debugInfo)): ?>
+            <!-- Información de debug — solo visible en modo dev -->
+            <?php if ($IS_DEV && !empty($debugInfo)): ?>
                 <div class="debug-info">
                     <strong>🔧 Información de Debug:</strong><br>
                     <?php foreach($debugInfo as $info): ?>

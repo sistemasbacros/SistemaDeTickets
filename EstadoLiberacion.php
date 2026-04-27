@@ -7,6 +7,7 @@
  * Muestra barra de progreso, tabla de firmantes con colores por estatus.
  */
 
+require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
 
 function getApiUrl(): string {

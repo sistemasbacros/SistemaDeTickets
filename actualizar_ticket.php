@@ -42,6 +42,7 @@
  * @updated 2026-04-23
  */
 
+require_once __DIR__ . '/auth_check_api.php';
 require_once __DIR__ . '/config.php';
 
 // URL base de la API Rust
@@ -63,35 +64,77 @@ if (!$id || !$asignado || !$estatus) {
 // El archivo se guarda localmente; la ruta se podría enviar a la API
 // en una llamada separada si el endpoint lo soportara.
 // ------------------------------------------------------------------
-if (isset($_FILES['evidenciaFoto']) && $_FILES['evidenciaFoto']['error'] === UPLOAD_ERR_OK) {
-    $fileTmpPath = $_FILES['evidenciaFoto']['tmp_name'];
-    $fileName    = $_FILES['evidenciaFoto']['name'];
-    $fileSize    = $_FILES['evidenciaFoto']['size'];
-    $fileType    = $_FILES['evidenciaFoto']['type'];
-
-    $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-    $maxSize      = 5 * 1024 * 1024; // 5 MB
-
-    if (!in_array($fileType, $allowedTypes) || $fileSize > $maxSize) {
+if (isset($_FILES['evidenciaFoto'])) {
+    if ($_FILES['evidenciaFoto']['error'] !== UPLOAD_ERR_OK) {
         http_response_code(400);
-        echo "Tipo o tamaño de archivo no permitido.";
+        echo json_encode(['error' => 'Error al recibir archivo (código ' . $_FILES['evidenciaFoto']['error'] . ').']);
         exit;
     }
 
-    $uploadDir = __DIR__ . '/uploads/';
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0755, true);
+    $fileTmpPath = $_FILES['evidenciaFoto']['tmp_name'];
+    $fileSize    = (int) $_FILES['evidenciaFoto']['size'];
+    $maxSize     = 5 * 1024 * 1024; // 5 MB
+
+    if ($fileSize <= 0 || $fileSize > $maxSize) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Tamaño de archivo no permitido (máx 5MB).']);
+        exit;
     }
 
-    $fileExt     = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-    $newFileName = 'ticket_' . $id . '_' . time() . '.' . $fileExt;
-    $destPath    = $uploadDir . $newFileName;
+    // Validar contenido real de la imagen (NO confiar en $_FILES[...]['type'])
+    $info = @getimagesize($fileTmpPath);
+    if ($info === false || empty($info['mime'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'El archivo no es una imagen válida.']);
+        exit;
+    }
+
+    $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!in_array($info['mime'], $allowedMimes, true)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Tipo de imagen no permitido (solo JPEG/PNG/GIF/WEBP).']);
+        exit;
+    }
+
+    $ext = match ($info['mime']) {
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/gif'  => 'gif',
+        'image/webp' => 'webp',
+    };
+
+    // Generar nombre nuevo: nunca reusar el original (evita XSS / path traversal)
+    $safeName = 'ticket_' . preg_replace('/[^A-Za-z0-9_-]/', '', (string) $id)
+              . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+
+    $base = realpath(__DIR__ . '/uploads');
+    if ($base === false) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Directorio de uploads no disponible.']);
+        exit;
+    }
+    $destPath = $base . DIRECTORY_SEPARATOR . $safeName;
 
     if (!move_uploaded_file($fileTmpPath, $destPath)) {
         http_response_code(500);
-        echo "Error al mover archivo.";
+        echo json_encode(['error' => 'Error al mover archivo.']);
         exit;
     }
+
+    // Verificar que el destino quedó dentro del directorio uploads (defensa anti path-traversal)
+    $resolved = realpath($destPath);
+    if ($resolved === false || strpos($resolved, $base . DIRECTORY_SEPARATOR) !== 0) {
+        @unlink($destPath);
+        http_response_code(500);
+        echo json_encode(['error' => 'Ruta de destino inválida.']);
+        exit;
+    }
+
+    @chmod($destPath, 0644);
+
+    $self = basename(__FILE__);
+    $ip   = $_SERVER['REMOTE_ADDR'] ?? '-';
+    error_log("UPLOAD ok ip={$ip} script={$self} file={$safeName} size={$fileSize} mime={$info['mime']}");
 
     // Archivo subido correctamente; continúa con la actualización del ticket
     // (el enlace de evidencia se almacenaría via un endpoint dedicado si existiera)

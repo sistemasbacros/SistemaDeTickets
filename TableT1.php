@@ -83,9 +83,8 @@
  * @since 2024
  * @updated 2026-02-18
  */
+require_once __DIR__ . '/auth_check.php';
 
-// INICIO DE SESIÓN Y VERIFICACIÓN
-<?php
 // INICIO DE SESIÓN Y VERIFICACIÓN
 session_start();
 

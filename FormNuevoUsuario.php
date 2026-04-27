@@ -5,12 +5,9 @@
  *        y genera carta de resguardo PDF vía API local (puerto 3000).
  */
 
-session_start();
-
-if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-    header('Location: Loginti.php?redirect=FormNuevoUsuario.php');
-    exit;
-}
+require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/roles.php';
+require_role('admin');
 
 require_once __DIR__ . '/config.php';
 
@@ -106,19 +103,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── Subida de foto ───────────────────────────────────────────────────────
     $fotoRuta = '';
-    if (!empty($_FILES['avatar']['tmp_name']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK) {
-        $allowed = ['image/jpeg','image/jpg','image/png','image/gif','image/webp','image/svg+xml','image/avif'];
-        if (!in_array($_FILES['avatar']['type'], $allowed)) {
-            echo json_encode(['error' => 'Tipo de imagen no permitido.']); exit;
+    $self    = basename(__FILE__);
+    $ip      = $_SERVER['REMOTE_ADDR'] ?? '-';
+    $errCode = $_FILES['avatar']['error'] ?? UPLOAD_ERR_NO_FILE;
+
+    // Solo procesar si efectivamente hubo archivo. UPLOAD_ERR_NO_FILE se ignora.
+    if ($errCode !== UPLOAD_ERR_NO_FILE) {
+        if ($errCode !== UPLOAD_ERR_OK) {
+            error_log("UPLOAD reject ip={$ip} script={$self} reason=upload_error code={$errCode}");
+            echo json_encode(['error' => 'Error al recibir el avatar (código ' . (int)$errCode . ').']); exit;
         }
-        if ($_FILES['avatar']['size'] > 25 * 1024 * 1024) {
-            echo json_encode(['error' => 'La imagen supera los 25 MB.']); exit;
+
+        $tmpPath = $_FILES['avatar']['tmp_name'];
+        $size    = (int) ($_FILES['avatar']['size'] ?? 0);
+        $maxSize = 5 * 1024 * 1024; // 5 MB
+
+        if ($size <= 0 || $size > $maxSize) {
+            error_log("UPLOAD reject ip={$ip} script={$self} reason=bad_size size={$size}");
+            echo json_encode(['error' => 'Tamaño de archivo no permitido (máx 5MB).']); exit;
         }
+
+        // Validar contenido real (NO confiar en $_FILES[...]['type'])
+        $info = @getimagesize($tmpPath);
+        if ($info === false || empty($info['mime'])) {
+            error_log("UPLOAD reject ip={$ip} script={$self} reason=not_an_image");
+            echo json_encode(['error' => 'El archivo no es una imagen válida.']); exit;
+        }
+
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!in_array($info['mime'], $allowedMimes, true)) {
+            error_log("UPLOAD reject ip={$ip} script={$self} reason=bad_mime mime={$info['mime']}");
+            echo json_encode(['error' => 'Tipo de imagen no permitido (solo JPEG/PNG/GIF/WEBP).']); exit;
+        }
+
+        $ext = match ($info['mime']) {
+            'image/jpeg' => 'jpg',
+            'image/png'  => 'png',
+            'image/gif'  => 'gif',
+            'image/webp' => 'webp',
+        };
+
         $dir = __DIR__ . '/uploads/usuarios/';
         if (!is_dir($dir)) mkdir($dir, 0755, true);
-        $ext     = strtolower(pathinfo($_FILES['avatar']['name'], PATHINFO_EXTENSION));
-        $newName = 'usr_' . preg_replace('/\W+/', '_', $f('username')) . '_' . time() . '.' . $ext;
-        move_uploaded_file($_FILES['avatar']['tmp_name'], $dir . $newName);
+        $base = realpath($dir);
+        if ($base === false) {
+            error_log("UPLOAD reject ip={$ip} script={$self} reason=base_dir_missing");
+            echo json_encode(['error' => 'Directorio de uploads no disponible.']); exit;
+        }
+
+        $newName  = bin2hex(random_bytes(16)) . '.' . $ext;
+        $destPath = $base . DIRECTORY_SEPARATOR . $newName;
+
+        if (!move_uploaded_file($tmpPath, $destPath)) {
+            error_log("UPLOAD reject ip={$ip} script={$self} reason=move_failed");
+            echo json_encode(['error' => 'Error al mover archivo.']); exit;
+        }
+
+        // Defensa anti path-traversal: confirmar que el destino quedó dentro del directorio
+        $resolved = realpath($destPath);
+        if ($resolved === false || strpos($resolved, $base . DIRECTORY_SEPARATOR) !== 0) {
+            @unlink($destPath);
+            error_log("UPLOAD reject ip={$ip} script={$self} reason=path_escape");
+            echo json_encode(['error' => 'Ruta de destino inválida.']); exit;
+        }
+
+        @chmod($destPath, 0644);
+        error_log("UPLOAD ok ip={$ip} script={$self} file={$newName} size={$size} mime={$info['mime']}");
+
         $fotoRuta = 'uploads/usuarios/' . $newName;
     }
 
