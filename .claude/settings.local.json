@@ -10,7 +10,8 @@
       "Bash(grep -r 3000 /c/Users/Boris.Ramirez/Downloads --include=*.js --include=*.mjs --include=*.ts)",
       "Bash(grep -r \"jefes\\\\|jefe\" /c/Users/Boris.Ramirez/Downloads --include=*.js --include=*.mjs --include=*.ts)",
       "Bash(xargs grep:*)",
-      "Bash(find /c/Users/Boris.Ramirez/Documents -type f -name *.ts -o -name *.js)"
+      "Bash(find /c/Users/Boris.Ramirez/Documents -type f -name *.ts -o -name *.js)",
+      "Bash(git merge *)"
     ]
   }
 }
