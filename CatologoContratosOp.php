@@ -29,6 +29,7 @@
  * @version 1.0
  * @since 2024
  */
+require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
 ?>
     <button class="btn btn-default1" id="Ini" name='Ini' onclick="window.location.href='<?php echo COMEDOR_URL; ?>/Comedor/PlatBacrocorp.php'"> <img src="Inicio.jpg" width="65" /> </button> &nbsp;&nbsp;

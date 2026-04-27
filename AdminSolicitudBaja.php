@@ -7,6 +7,9 @@
  * permite completar datos del empleado y asignar firmantes con logica AND/OR por area.
  */
 
+require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/roles.php';
+require_role('admin');
 require_once __DIR__ . '/config.php';
 
 function getApiUrl(): string {

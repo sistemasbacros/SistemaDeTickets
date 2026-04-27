@@ -14,6 +14,7 @@
  * @version 3.0
  * @since 2024
  */
+require_once __DIR__ . '/auth_check.php';
 
 // Incluir los archivos necesarios de PHPMailer
 require 'PHPMailer/src/PHPMailer.php';

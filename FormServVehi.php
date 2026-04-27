@@ -16,7 +16,7 @@
  * @version 2.0
  * @since 2024
  */
-
+require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
 $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
 
@@ -60,23 +60,98 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $comentarios  = test_input($_POST["mensaje"]      ?? '');
     $id           = test_input($_POST["id"]           ?? $ticketID);
 
-    // Subida de imágenes (se mantiene local, igual que antes)
-    $uploadDir = 'uploads/';
-    if (!file_exists($uploadDir)) {
-        mkdir($uploadDir, 0777, true);
+    // Validación server-side de longitudes (defensa contra payloads abusivos)
+    $lenChecks = [
+        'placas'       => [$placas,       20],
+        'incidencia'   => [$problema,     200],
+        'nombre'       => [$nombre,       100],
+        'departamento' => [$departamento, 100],
+        'mensaje'      => [$comentarios,  3000],
+    ];
+    foreach ($lenChecks as $field => [$val, $max]) {
+        if (strlen($val) > $max) {
+            $ipLog   = $_SERVER['REMOTE_ADDR'] ?? '-';
+            $selfLog = basename(__FILE__);
+            error_log("UPLOAD reject ip={$ipLog} script={$selfLog} reason=field_too_long field={$field} len=" . strlen($val));
+            echo "<script>
+                alert('Datos del formulario exceden los límites permitidos.');
+                window.history.back();
+            </script>";
+            exit();
+        }
     }
 
+    // Subida de imágenes (se mantiene local, igual que antes)
+    $uploadDir = __DIR__ . '/uploads/';
+    if (!file_exists($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
+    $base = realpath($uploadDir);
+
+    $self = basename(__FILE__);
+    $ip   = $_SERVER['REMOTE_ADDR'] ?? '-';
+
     $uploadedFiles = [];
-    if (!empty($_FILES['evidencias']['name'][0])) {
+    if (!empty($_FILES['evidencias']['name'][0]) && $base !== false) {
+        $maxSize = 5 * 1024 * 1024; // 5 MB
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
         foreach ($_FILES['evidencias']['tmp_name'] as $index => $tmpName) {
-            $fileName  = basename($_FILES['evidencias']['name'][$index]);
-            $sanitized = preg_replace("/[^a-zA-Z0-9._-]/", "_", $fileName);
-            $targetPath = $uploadDir . time() . '_' . $sanitized;
-            $fileType   = strtolower(pathinfo($targetPath, PATHINFO_EXTENSION));
-            $allowedTypes = ['jpg', 'jpeg', 'png'];
-            if (in_array($fileType, $allowedTypes) && move_uploaded_file($tmpName, $targetPath)) {
-                $uploadedFiles[] = $targetPath;
+            $err  = $_FILES['evidencias']['error'][$index] ?? UPLOAD_ERR_NO_FILE;
+            $size = (int) ($_FILES['evidencias']['size'][$index] ?? 0);
+
+            // Ignorar silenciosamente cuando el usuario no adjuntó archivo
+            if ($err === UPLOAD_ERR_NO_FILE) {
+                continue;
             }
+            if ($err !== UPLOAD_ERR_OK) {
+                error_log("UPLOAD reject ip={$ip} script={$self} reason=upload_error code={$err}");
+                continue;
+            }
+            if ($size <= 0 || $size > $maxSize) {
+                error_log("UPLOAD reject ip={$ip} script={$self} reason=bad_size size={$size}");
+                continue;
+            }
+
+            // Validar contenido real (NO confiar en $_FILES[...]['type'])
+            $info = @getimagesize($tmpName);
+            if ($info === false || empty($info['mime'])) {
+                error_log("UPLOAD reject ip={$ip} script={$self} reason=not_an_image");
+                continue;
+            }
+            if (!in_array($info['mime'], $allowedMimes, true)) {
+                error_log("UPLOAD reject ip={$ip} script={$self} reason=bad_mime mime={$info['mime']}");
+                continue;
+            }
+
+            $ext = match ($info['mime']) {
+                'image/jpeg' => 'jpg',
+                'image/png'  => 'png',
+                'image/gif'  => 'gif',
+                'image/webp' => 'webp',
+            };
+
+            $safeName = bin2hex(random_bytes(16)) . '.' . $ext;
+            $destPath = $base . DIRECTORY_SEPARATOR . $safeName;
+
+            if (!move_uploaded_file($tmpName, $destPath)) {
+                error_log("UPLOAD reject ip={$ip} script={$self} reason=move_failed");
+                continue;
+            }
+
+            // Defensa anti path-traversal: confirmar que el destino quedó dentro del directorio
+            $resolved = realpath($destPath);
+            if ($resolved === false || strpos($resolved, $base . DIRECTORY_SEPARATOR) !== 0) {
+                @unlink($destPath);
+                error_log("UPLOAD reject ip={$ip} script={$self} reason=path_escape");
+                continue;
+            }
+
+            @chmod($destPath, 0644);
+            error_log("UPLOAD ok ip={$ip} script={$self} file={$safeName} size={$size} mime={$info['mime']}");
+
+            // Conservar el contrato del API: rutas relativas separadas por coma
+            $uploadedFiles[] = 'uploads/' . $safeName;
         }
     }
     $evidenciasDB = implode(',', $uploadedFiles);

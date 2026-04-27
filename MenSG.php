@@ -40,6 +40,7 @@
  * @version 1.0
  * @since 2024
  */
+require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
 ?>
 <!DOCTYPE html>

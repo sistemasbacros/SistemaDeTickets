@@ -18,13 +18,7 @@
  * @since 2024
  */
 
-session_start();
-
-// Verificar si el usuario está autenticado
-if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    header("Location: Loginti.php");
-    exit();
-}
+require_once __DIR__ . '/auth_check.php';
 
 // Obtener datos del usuario desde la sesión
 $nombre_usuario = $_SESSION['user_name']     ?? 'Usuario';

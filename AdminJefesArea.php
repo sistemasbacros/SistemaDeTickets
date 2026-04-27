@@ -8,12 +8,9 @@
  * Requiere sesion activa (login) para acceder.
  */
 
-session_start();
-
-if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-    header('Location: Loginti.php?redirect=AdminJefesArea.php');
-    exit;
-}
+require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/roles.php';
+require_role('admin');
 
 require_once __DIR__ . '/config.php';
 

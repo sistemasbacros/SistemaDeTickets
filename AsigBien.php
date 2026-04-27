@@ -41,6 +41,7 @@
  * @since 2024
  */
 
+require_once __DIR__ . '/auth_check.php';
 session_start(); // this NEEDS TO BE AT THE TOP of the page before any output etc
   // echo $_SESSION['superhero'];
 

@@ -55,6 +55,8 @@
  * @updated 2026-04-23
  */
 
+require_once __DIR__ . '/auth_check_api.php';
+
 // HEADERS PRIMERO - ANTES DE CUALQUIER SALIDA
 header('Content-Type: application/json');
 

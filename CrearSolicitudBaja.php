@@ -7,6 +7,7 @@
  * El API genera el folio y devuelve el admin_token para configurar firmantes.
  */
 
+require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
 
 function getApiUrl(): string {

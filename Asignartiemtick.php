@@ -44,6 +44,7 @@
  * @since 2024
  */
 
+require_once __DIR__ . '/auth_check_api.php';
 $arrayRecibido=json_decode($_POST["arrayDeValores"], true );
  
 echo "Hemos recibido en el PHP un array de ".count($arrayRecibido)." elementos de luis123232";
