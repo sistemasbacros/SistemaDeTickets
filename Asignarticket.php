@@ -17,22 +17,20 @@
  * @since 2024
  */
 
+require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/api_client.php';
 $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
 
-// Obtener personal desde la API
+// Obtener personal desde la API (endpoint protegido con JWT)
 $usuarios = [];
-$ch = curl_init($apiUrl . '/api/TicketBacros/personal');
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT        => 10,
-    CURLOPT_HTTPHEADER     => ['Accept: application/json'],
-]);
-$resp = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-if ($httpCode === 200 && $resp) {
-    $data = json_decode($resp, true);
+$resp = api_call('GET', '/api/TicketBacros/personal');
+if ($resp['ok']) {
+    $data = $resp['json'] ?? [];
+    // Soporta tanto array plano como envoltorio { data: [...] }
+    if (isset($data['data']) && is_array($data['data'])) {
+        $data = $data['data'];
+    }
     if (is_array($data)) {
         foreach ($data as $row) {
             $usuarios[] = $row['Nombre'] ?? $row['nombre'] ?? '';

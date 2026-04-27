@@ -27,6 +27,14 @@
  * @updated 2026-04-23
  */
 
+// Dispatcher: XHR / JSON callers go through the API guard so they
+// get HTTP 401 instead of a 302 redirect.
+if (($_GET['action'] ?? '') === 'getData' || ($_POST['action'] ?? '') === 'getData') {
+    require_once __DIR__ . '/auth_check_api.php';
+} else {
+    require_once __DIR__ . '/auth_check.php';
+}
+
 // ── Si se solicita la data en JSON (ajax) ─────────────────────────────────────
 if (isset($_GET['action']) && $_GET['action'] === 'getData') {
     header('Content-Type: application/json');

@@ -7,6 +7,9 @@
  * Muestra tabla con barra de progreso y acceso al detalle de cada solicitud.
  */
 
+require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/roles.php';
+require_role('admin');
 require_once __DIR__ . '/config.php';
 
 function getApiUrl(): string {

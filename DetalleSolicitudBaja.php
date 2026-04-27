@@ -7,6 +7,7 @@
  * Muestra datos del empleado, progreso por area (AND/OR), detalle de cada firmante.
  */
 
+require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
 
 function getApiUrl(): string {

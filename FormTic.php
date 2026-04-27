@@ -37,6 +37,7 @@
  * @version 2.0
  * @since 2024
  */
+require_once __DIR__ . '/auth_check.php';
 ?>
 <!DOCTYPE html>
 <html lang="es">

@@ -7,8 +7,109 @@
  * Muestra datos del empleado, canvas para firma digital y botones Firmar/Rechazar.
  * Llama POST /api/TicketBacros/liberacion/firmar
  */
+require_once __DIR__ . '/auth_check.php';
+
+// Token format guard — reject malformed tokens early so probes can't fingerprint the page.
+$rawToken = $_GET['token'] ?? '';
+if (!is_string($rawToken) || $rawToken === '' || strlen($rawToken) > 256
+    || !preg_match('/^[A-Za-z0-9_\-\.]+$/', $rawToken)) {
+    http_response_code(400);
+    @error_log(sprintf(
+        'TOKEN_REJECT script=%s ip=%s user=%s len=%d',
+        basename($_SERVER['SCRIPT_NAME'] ?? '-'),
+        $_SERVER['REMOTE_ADDR']     ?? '-',
+        $_SESSION['user_username']  ?? '-',
+        is_string($rawToken) ? strlen($rawToken) : 0
+    ));
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Token inválido</title>';
+    echo '<h1>Token inválido</h1>';
+    echo '<p>El enlace de firma que abriste no es válido. Si llegaste aquí desde un correo, vuelve al mensaje original y haz clic de nuevo. Si el problema persiste, contacta al administrador.</p>';
+    echo '<p><a href="IniSoport.php">Volver al inicio</a></p>';
+    exit;
+}
+
+// Folio format guard — folios siguen patron tipo LIB-2026-XXXX (alfanumerico + guion/underscore).
+$rawFolio = $_GET['folio'] ?? '';
+if (!is_string($rawFolio) || $rawFolio === '' || !preg_match('/^[A-Z0-9_\-]{1,64}$/', $rawFolio)) {
+    http_response_code(400);
+    @error_log(sprintf(
+        'FOLIO_REJECT script=%s ip=%s user=%s len=%d',
+        basename($_SERVER['SCRIPT_NAME'] ?? '-'),
+        $_SERVER['REMOTE_ADDR']     ?? '-',
+        $_SESSION['user_username']  ?? '-',
+        is_string($rawFolio) ? strlen($rawFolio) : 0
+    ));
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Folio inválido</title>';
+    echo '<h1>Folio inválido</h1>';
+    echo '<p>El enlace de firma que abriste no es válido. Si llegaste aquí desde un correo, vuelve al mensaje original y haz clic de nuevo. Si el problema persiste, contacta al administrador.</p>';
+    echo '<p><a href="IniSoport.php">Volver al inicio</a></p>';
+    exit;
+}
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/api_client.php';
+
+// ─── Validación server-side del token ANTES de renderizar la página ───────
+// Defensa en profundidad: el regex de arriba ya descartó tokens malformados,
+// ahora verificamos contra la API que el token EXISTE, está Pendiente y es turno.
+$validation = api_call('GET', '/api/TicketBacros/liberacion/check-token/' . urlencode($rawToken));
+
+if ($validation['http'] === 404) {
+    http_response_code(404);
+    @error_log("FIRMAR_LIB_REJECT reason=token_not_found token_len=" . strlen($rawToken)
+             . " ip=" . ($_SERVER['REMOTE_ADDR'] ?? '-'));
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Enlace no encontrado</title>';
+    echo '<h1>Enlace de firma no encontrado</h1>';
+    echo '<p>El enlace de firma no existe o ya fue eliminado.</p>';
+    echo '<p><a href="IniSoport.php">Volver al inicio</a></p>';
+    exit;
+}
+
+if ($validation['http'] === 400 || $validation['http'] === 422) {
+    $msg = $validation['json']['message'] ?? $validation['json']['error'] ?? 'Token inválido';
+    http_response_code(410);
+    @error_log("FIRMAR_LIB_REJECT reason=token_invalid msg=" . substr($msg, 0, 100)
+             . " ip=" . ($_SERVER['REMOTE_ADDR'] ?? '-'));
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Enlace ya usado o no es turno</title>';
+    echo '<h1>Este enlace ya fue usado o aún no es tu turno de firmar</h1>';
+    echo '<p>' . htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') . '</p>';
+    echo '<p><a href="IniSoport.php">Volver al inicio</a></p>';
+    exit;
+}
+
+if (!$validation['ok']) {
+    http_response_code(503);
+    @error_log("FIRMAR_LIB_REJECT reason=api_error http=" . $validation['http']
+             . " err=" . substr($validation['error'] ?? '-', 0, 100)
+             . " ip=" . ($_SERVER['REMOTE_ADDR'] ?? '-'));
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Servicio no disponible</title>';
+    echo '<h1>Servicio temporalmente no disponible</h1>';
+    echo '<p>Inténtalo de nuevo en unos minutos.</p>';
+    exit;
+}
+
+// Validación server-side OK — extraemos metadata mínima.
+// Esto NO incluye tokens de otros firmantes ni firmas almacenadas.
+$tokenMeta = $validation['json']['data'] ?? [];
+
+// Asegurar que el folio en la URL coincide con el folio que respondió el API.
+if (!empty($_GET['folio']) && isset($tokenMeta['folio'])
+    && !hash_equals((string)$tokenMeta['folio'], (string)$_GET['folio'])) {
+    http_response_code(400);
+    @error_log("FIRMAR_LIB_REJECT reason=folio_mismatch url_folio=" . $_GET['folio']
+             . " token_folio=" . $tokenMeta['folio']
+             . " ip=" . ($_SERVER['REMOTE_ADDR'] ?? '-'));
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Enlace inconsistente</title>';
+    echo '<h1>Enlace inconsistente</h1>';
+    echo '<p>El folio del enlace no coincide con el firmante. Revisa el correo original.</p>';
+    exit;
+}
 
 function getApiUrl(): string {
     $url = getenv('PDF_API_URL') ?: '';

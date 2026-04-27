@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/auth_check.php'; ?>
 
 
 <?php
@@ -84,24 +85,19 @@
  * @updated 2025-01-10
  */
 
-
-<?php
 session_start();
 date_default_timezone_set('America/Mexico_City');
 
 // Contactos vía API (reemplaza conexión directa a BASENUEVA)
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/api_client.php';
 $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
 
 $array_tot1 = [];
-$ch = curl_init($apiUrl . '/api/TicketBacros/contactos');
-curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10]);
-$resp = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-
-if ($httpCode === 200 && $resp) {
-    $json = json_decode($resp, true);
+// Endpoint protegido con JWT — api_call() reenvía $_SESSION['api_jwt']
+$resp = api_call('GET', '/api/TicketBacros/contactos');
+if ($resp['ok']) {
+    $json  = $resp['json'] ?? [];
     $items = $json['data'] ?? [];
     foreach ($items as $item) {
         $name = $item['nombre'] ?? $item['Nombre'] ?? '';

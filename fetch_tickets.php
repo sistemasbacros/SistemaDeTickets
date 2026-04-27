@@ -24,6 +24,8 @@
  * @updated 2026-04-23
  */
 
+require_once __DIR__ . '/auth_check_api.php';
+
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/config.php';

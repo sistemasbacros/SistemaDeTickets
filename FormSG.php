@@ -32,8 +32,23 @@
  * @version 2.0
  * @since 2024
  */
-
+require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/api_client.php';
+
+// Pre-cargar lista de personal vía api_call() (endpoint protegido con JWT).
+// Se inyecta en el HTML para que el JS no tenga que llamar al endpoint
+// protegido directamente desde el navegador (no tiene Authorization header).
+$personalPreload = [];
+$_resp = api_call('GET', '/api/TicketBacros/personal');
+if ($_resp['ok']) {
+    $_json = $_resp['json'] ?? [];
+    if (isset($_json['data']) && is_array($_json['data'])) {
+        $personalPreload = $_json['data'];
+    } elseif (is_array($_json)) {
+        $personalPreload = $_json;
+    }
+}
 
 /**
  * Determina la URL base de la API Rust.
@@ -373,26 +388,20 @@ function getApiUrl(): string
 
     generateTicketID();
 
-    // ── Cargar lista de personal desde la API ─────────────────────
+    // ── Cargar lista de personal (pre-inyectada desde PHP) ────────
     // Fuente: GET /api/TicketBacros/personal  (tabla conped, BD Ticket)
-    // Nota: el origen original era [BASENUEVA].[dbo].[vwLBSContactList]
-    // (BD Comercial). Si se necesita ese origen, hay que agregar un
-    // endpoint dedicado en el backend Rust.
-    async function cargarPersonal() {
+    // El endpoint requiere Bearer JWT, por lo que la página PHP lo
+    // consulta server-side con api_call() (que reenvía $_SESSION['api_jwt'])
+    // y embebe el resultado en window.PERSONAL_DATA.
+    const PERSONAL_DATA = <?php echo json_encode($personalPreload, JSON_UNESCAPED_UNICODE); ?>;
+
+    function cargarPersonal() {
       const select = document.getElementById('Nombre');
       const loadingMsg = document.getElementById('loadingMsg');
 
       loadingMsg.classList.add('visible');
 
       try {
-        const response = await fetch(API_URL + '/api/TicketBacros/personal');
-
-        if (!response.ok) {
-          throw new Error('HTTP ' + response.status);
-        }
-
-        const result = await response.json();
-
         // Limpiar opciones previas
         select.innerHTML = '';
 
@@ -404,7 +413,7 @@ function getApiUrl(): string
         defaultOpt.selected = true;
         select.appendChild(defaultOpt);
 
-        if (!result.data || result.data.length === 0) {
+        if (!PERSONAL_DATA || PERSONAL_DATA.length === 0) {
           const emptyOpt = document.createElement('option');
           emptyOpt.value = '';
           emptyOpt.textContent = 'No hay personal registrado';
@@ -413,12 +422,14 @@ function getApiUrl(): string
           return;
         }
 
-        result.data.forEach(function (persona) {
+        PERSONAL_DATA.forEach(function (persona) {
+          const nombre = persona.nombre || persona.Nombre || '';
+          if (!nombre) return;
           const option = document.createElement('option');
           // El valor usa el nombre completo en minúsculas con guiones bajos
           // para mantener compatibilidad con el comportamiento original.
-          option.value = persona.nombre.toLowerCase().replace(/\s+/g, '_');
-          option.textContent = persona.nombre;
+          option.value = nombre.toLowerCase().replace(/\s+/g, '_');
+          option.textContent = nombre;
           select.appendChild(option);
         });
 
