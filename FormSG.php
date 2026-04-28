@@ -35,6 +35,7 @@
 require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/api_client.php';
+require_once __DIR__ . '/js_escape.php';
 
 // Pre-cargar lista de personal vía api_call() (endpoint protegido con JWT).
 // Se inyecta en el HTML para que el JS no tenga que llamar al endpoint
@@ -351,7 +352,7 @@ function getApiUrl(): string
     // URL base de la API — debe coincidir con la URL del backend Rust.
     // En producción se puede definir la variable de entorno API_URL.
     // ──────────────────────────────────────────────────────────────
-    const API_URL = <?php echo json_encode(getApiUrl()); ?>;
+    const API_URL = <?= js_value(getApiUrl()) ?>;
 
     // ── Navegación ────────────────────────────────────────────────
     document.getElementById('homeButton').addEventListener('click', function () {
@@ -393,7 +394,7 @@ function getApiUrl(): string
     // El endpoint requiere Bearer JWT, por lo que la página PHP lo
     // consulta server-side con api_call() (que reenvía $_SESSION['api_jwt'])
     // y embebe el resultado en window.PERSONAL_DATA.
-    const PERSONAL_DATA = <?php echo json_encode($personalPreload, JSON_UNESCAPED_UNICODE); ?>;
+    const PERSONAL_DATA = <?= js_value($personalPreload) ?>;
 
     function cargarPersonal() {
       const select = document.getElementById('Nombre');
