@@ -38,6 +38,7 @@
  * @since 2024
  */
 require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/js_escape.php';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -374,7 +375,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $decoded = json_decode($response, true);
     $api_msg = isset($decoded['message']) ? $decoded['message'] : "Error HTTP $http_status";
     error_log("API error al crear ticket TI: HTTP $http_status — $response");
-    showErrorAlert("Error al guardar el ticket: " . htmlspecialchars($api_msg));
+    showErrorAlert("Error al guardar el ticket: " . $api_msg);
   } else {
     // Ticket creado exitosamente en la API
     $emailResults = sendConfirmationEmails(
@@ -815,6 +816,10 @@ function showSuccessAlert($name, $email, $ticketId, $userEmailSent, $adminEmailS
 
   echo '
   <script>
+  const _swalName        = ' . js_value($name) . ';
+  const _swalEmail       = ' . js_value($email) . ';
+  const _swalTicketId    = ' . js_value($ticketId) . ';
+  const _swalEmailStatus = ' . js_value($emailStatus) . ';
   Swal.fire({
       title: "✅ ¡Ticket Creado Exitosamente!",
       html: `
@@ -823,14 +828,14 @@ function showSuccessAlert($name, $email, $ticketId, $userEmailSent, $adminEmailS
               <h2 style="color: #003366; margin-bottom: 15px;">Solicitud Registrada</h2>
 
               <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin: 15px 0;">
-                  <p style="margin: 5px 0;"><strong>Nombre:</strong> ' . $name . '</p>
-                  <p style="margin: 5px 0;"><strong>Correo:</strong> ' . $email . '</p>
+                  <p style="margin: 5px 0;"><strong>Nombre:</strong> ${_swalName}</p>
+                  <p style="margin: 5px 0;"><strong>Correo:</strong> ${_swalEmail}</p>
                   <p style="margin: 10px 0;"><strong>Ticket ID:</strong>
-                      <span style="background: #003366; color: white; padding: 8px 15px; border-radius: 20px; font-size: 16px; font-weight: bold;">' . $ticketId . '</span>
+                      <span style="background: #003366; color: white; padding: 8px 15px; border-radius: 20px; font-size: 16px; font-weight: bold;">${_swalTicketId}</span>
                   </p>
               </div>
 
-              ' . $emailStatus . '
+              ${_swalEmailStatus}
 
               <p style="color: #666; font-size: 14px; margin-top: 15px;">El ticket ha sido registrado en el sistema correctamente.</p>
           </div>
@@ -848,6 +853,8 @@ function showSuccessAlert($name, $email, $ticketId, $userEmailSent, $adminEmailS
 function showWarningAlert($ticketId, $error) {
   echo '
   <script>
+  const _swalWarnTicketId = ' . js_value($ticketId) . ';
+  const _swalWarnError    = ' . js_value($error) . ';
   Swal.fire({
       title: "⚠️ Ticket Creado",
       html: `
@@ -856,11 +863,11 @@ function showWarningAlert($ticketId, $error) {
               <h2 style="color: #003366; margin-bottom: 15px;">¡Solicitud Registrada!</h2>
 
               <p style="margin-bottom: 20px;"><strong>Ticket ID:</strong>
-                  <span style="background: #003366; color: white; padding: 8px 15px; border-radius: 20px; font-size: 16px; font-weight: bold;">' . $ticketId . '</span>
+                  <span style="background: #003366; color: white; padding: 8px 15px; border-radius: 20px; font-size: 16px; font-weight: bold;">${_swalWarnTicketId}</span>
               </p>
 
               <p style="color: #666; font-size: 14px; margin-bottom: 10px;">El ticket se ha guardado en el sistema correctamente.</p>
-              <p style="color: #dc3545; font-size: 14px; font-weight: bold;">Error: ' . addslashes($error) . '</p>
+              <p style="color: #dc3545; font-size: 14px; font-weight: bold;">Error: ${_swalWarnError}</p>
           </div>
       `,
       icon: "warning",
@@ -876,12 +883,13 @@ function showWarningAlert($ticketId, $error) {
 function showErrorAlert($message) {
   echo '
   <script>
+  const _swalErrMessage = ' . js_value($message) . ';
   Swal.fire({
       title: "❌ Error",
       html: `
           <div style="text-align: center; padding: 20px;">
               <div style="font-size: 60px; color: #dc3545; margin-bottom: 20px;">⚠️</div>
-              <p style="color: #2c3e50;">' . $message . '</p>
+              <p style="color: #2c3e50;">${_swalErrMessage}</p>
               <p style="color: #666; font-size: 14px; margin-top: 15px;">Por favor, intente nuevamente.</p>
           </div>
       `,

@@ -8,6 +8,7 @@
  * Llama POST /api/TicketBacros/liberacion/firmar
  */
 require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/js_escape.php';
 
 // Token format guard — reject malformed tokens early so probes can't fingerprint the page.
 $rawToken = $_GET['token'] ?? '';
@@ -429,9 +430,9 @@ button:disabled { opacity: .6; cursor: not-allowed; transform: none !important; 
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-const API_URL = '<?= $apiUrlJs ?>';
-const FOLIO   = '<?= htmlspecialchars($folio, ENT_QUOTES) ?>';
-const TOKEN   = '<?= htmlspecialchars($token, ENT_QUOTES) ?>';
+const API_URL = <?= js_value($apiUrlJs) ?>;
+const FOLIO   = <?= js_value($folio) ?>;
+const TOKEN   = <?= js_value($token) ?>;
 
 // ── Canvas de firma ──────────────────────────────────────────────────────────
 const canvas = document.getElementById('firma-canvas');
