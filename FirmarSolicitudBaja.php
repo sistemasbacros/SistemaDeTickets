@@ -8,6 +8,7 @@
  * Muestra conceptos del departamento, canvas de firma, y envia POST para firmar/rechazar.
  */
 require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/js_escape.php';
 
 // Token format guard — reject malformed tokens early so probes can't fingerprint the page.
 $rawToken = $_GET['token'] ?? '';
@@ -377,7 +378,7 @@ button:disabled { opacity: .6; cursor: not-allowed; transform: none !important; 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 const API_URL = window.location.protocol + '//' + window.location.hostname + ':3000';
-const TOKEN   = '<?= htmlspecialchars($token, ENT_QUOTES) ?>';
+const TOKEN   = <?= js_value($token) ?>;
 
 let firmanteData = null;
 let conceptos = [];

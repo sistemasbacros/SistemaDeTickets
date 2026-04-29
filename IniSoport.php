@@ -11,12 +11,19 @@
  * @version 4.0 (API-only)
  */
 
-session_start();
+// Cookie hardening (must run BEFORE session_start)
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path'     => '/',
+    'domain'   => '',
+    'secure'   => true,
+    'httponly' => true,
+    'samesite' => 'Strict',
+]);
+ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
 
-ini_set('session.cookie_httponly', 1);
-ini_set('session.cookie_secure', 1);
-ini_set('session.use_strict_mode', 1);
-ini_set('session.cookie_samesite', 'Strict');
+session_start();
 
 header("Cache-Control: no-cache, no-store, must-revalidate, max-age=0");
 header("Pragma: no-cache");

@@ -15,6 +15,7 @@
  * @since 2024
  */
 require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/js_escape.php';
 
 // Incluir los archivos necesarios de PHPMailer
 require 'PHPMailer/src/PHPMailer.php';
@@ -332,16 +333,20 @@ function showSuccessAlert($name, $email, $ticketId) {
     </head>
     <body>
         <script>
+        const _swalName     = ' . js_value($name) . ';
+        const _swalEmail    = ' . js_value($email) . ';
+        const _swalTicketId = ' . js_value($ticketId) . ';
+        const _swalHomeUrl  = ' . js_value($home_url) . ';
         Swal.fire({
             title: "Ticket Creado Exitosamente",
             html: `
                 <div style="text-align: center; padding: 20px;">
                     <h2 style="color: #003366; margin-bottom: 15px;">Solicitud Registrada</h2>
                     <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin: 15px 0;">
-                        <p style="margin: 5px 0;"><strong>Nombre:</strong> ' . addslashes(htmlspecialchars($name)) . '</p>
-                        <p style="margin: 5px 0;"><strong>Correo:</strong> ' . addslashes(htmlspecialchars($email)) . '</p>
+                        <p style="margin: 5px 0;"><strong>Nombre:</strong> ${_swalName}</p>
+                        <p style="margin: 5px 0;"><strong>Correo:</strong> ${_swalEmail}</p>
                         <p style="margin: 10px 0;"><strong>Ticket ID:</strong>
-                            <span style="background: #003366; color: white; padding: 8px 15px; border-radius: 20px; font-size: 16px; font-weight: bold;">' . addslashes(htmlspecialchars($ticketId)) . '</span>
+                            <span style="background: #003366; color: white; padding: 8px 15px; border-radius: 20px; font-size: 16px; font-weight: bold;">${_swalTicketId}</span>
                         </p>
                     </div>
                     <p style="color: #28a745; font-weight: bold;">Ticket guardado correctamente</p>
@@ -355,7 +360,7 @@ function showSuccessAlert($name, $email, $ticketId) {
             timer: 3000,
             timerProgressBar: true
         }).then((result) => {
-            window.location.href = "' . $home_url . '";
+            window.location.href = _swalHomeUrl;
         });
         </script>
     </body>
@@ -378,11 +383,12 @@ function showErrorAlert($message) {
     </head>
     <body>
         <script>
+        const _swalErrMessage = ' . js_value($message) . ';
         Swal.fire({
             title: "Error",
             html: `
                 <div style="text-align: center; padding: 20px;">
-                    <p style="color: #2c3e50;">' . addslashes($message) . '</p>
+                    <p style="color: #2c3e50;">${_swalErrMessage}</p>
                     <p style="color: #666; font-size: 14px; margin-top: 15px;">Por favor, intenta nuevamente.</p>
                 </div>
             `,
