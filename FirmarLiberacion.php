@@ -6,8 +6,10 @@
  * URL de entrada: FirmarLiberacion.php?folio=LIB-2026-XXXX&token=abc123...
  * Muestra datos del empleado, canvas para firma digital y botones Firmar/Rechazar.
  * Llama POST /api/TicketBacros/liberacion/firmar
+ *
+ * NOTA: Página pública por token (magic link). NO incluir auth_check.php
+ * — la autenticación la hace el token UUID validado contra la API.
  */
-require_once __DIR__ . '/auth_check.php';
 
 // Token format guard — reject malformed tokens early so probes can't fingerprint the page.
 $rawToken = $_GET['token'] ?? '';

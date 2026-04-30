@@ -6,8 +6,10 @@
  * URL: FirmarSolicitudBaja.php?token=abc123...
  * Carga datos del firmante via GET /api/TicketBacros/solicitud-baja/firmar/{token}
  * Muestra conceptos del departamento, canvas de firma, y envia POST para firmar/rechazar.
+ *
+ * NOTA: Página pública por token (magic link). NO incluir auth_check.php
+ * — la autenticación la hace el token UUID validado contra la API.
  */
-require_once __DIR__ . '/auth_check.php';
 
 // Token format guard — reject malformed tokens early so probes can't fingerprint the page.
 $rawToken = $_GET['token'] ?? '';
