@@ -5,11 +5,12 @@
  *
  * Recibe admin_token por GET, carga datos de la solicitud y catalogo de jefes,
  * permite completar datos del empleado y asignar firmantes con logica AND/OR por area.
+ *
+ * NOTA: Página pública por admin_token (magic link). NO incluir auth_check
+ * ni require_role — la autenticación la hace el admin_token UUID validado
+ * contra la API en /api/TicketBacros/solicitud-baja/admin/{admin_token}.
  */
 
-require_once __DIR__ . '/auth_check.php';
-require_once __DIR__ . '/roles.php';
-require_role('admin');
 require_once __DIR__ . '/config.php';
 
 function getApiUrl(): string {

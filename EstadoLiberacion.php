@@ -5,9 +5,11 @@
  *
  * Recibe el folio por GET y consulta GET /api/TicketBacros/liberacion/{folio}.
  * Muestra barra de progreso, tabla de firmantes con colores por estatus.
+ *
+ * NOTA: Página pública (consulta de estado por folio). NO incluir auth_check
+ * — el correo de notificación enlaza directo aquí para usuarios sin sesión.
  */
 
-require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/config.php';
 
 function getApiUrl(): string {
