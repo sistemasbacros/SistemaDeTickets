@@ -378,7 +378,11 @@ button:disabled { opacity: .6; cursor: not-allowed; transform: none !important; 
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-const API_URL = window.location.protocol + '//' + window.location.hostname + ':3000';
+// HTTPS (producción) → same-origin (nginx hace proxy interno a localhost:3000)
+// HTTP (dev local)   → puerto 3000 explícito (frontend y backend separados)
+const API_URL = window.location.protocol === 'https:'
+    ? window.location.origin
+    : window.location.protocol + '//' + window.location.hostname + ':3000';
 const TOKEN   = '<?= htmlspecialchars($token, ENT_QUOTES) ?>';
 
 let firmanteData = null;

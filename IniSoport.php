@@ -16,7 +16,9 @@ session_start();
 ini_set('session.cookie_httponly', 1);
 ini_set('session.cookie_secure', 1);
 ini_set('session.use_strict_mode', 1);
-ini_set('session.cookie_samesite', 'Strict');
+// Lax para mantener consistencia con Loginti.php / auth_check.php — Strict
+// rompe la sesión cuando el usuario llega desde un link externo (email).
+ini_set('session.cookie_samesite', 'Lax');
 
 header("Cache-Control: no-cache, no-store, must-revalidate, max-age=0");
 header("Pragma: no-cache");

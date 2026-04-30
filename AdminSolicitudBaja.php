@@ -370,7 +370,11 @@ input:focus, select:focus { background: #eaeaea; border-color: #0033cc; outline:
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-const API_URL    = window.location.protocol + '//' + window.location.hostname + ':3000';
+// HTTPS (producción) → same-origin (nginx hace proxy interno a localhost:3000)
+// HTTP (dev local)   → puerto 3000 explícito (frontend y backend separados)
+const API_URL = window.location.protocol === 'https:'
+    ? window.location.origin
+    : window.location.protocol + '//' + window.location.hostname + ':3000';
 const ADMIN_TOKEN = '<?= htmlspecialchars($adminToken, ENT_QUOTES) ?>';
 
 let solicitud = null;

@@ -596,7 +596,11 @@ document.getElementById('homeButton').addEventListener('click', () => {
 
 function previsualizarPdf() {
     const folio = '<?= htmlspecialchars($folio, ENT_QUOTES) ?>';
-    const API_URL = window.location.protocol + '//' + window.location.hostname + ':3000';
+    // HTTPS (producción) → same-origin (nginx proxy a localhost:3000)
+    // HTTP (dev local)   → puerto 3000 explícito
+    const API_URL = window.location.protocol === 'https:'
+        ? window.location.origin
+        : window.location.protocol + '//' + window.location.hostname + ':3000';
     const pdfUrl = `${API_URL}/api/TicketBacros/pdfs/BCR-TH-SGI-FO-27_BAJA_${folio.replace(/-/g, '_')}.pdf?t=${Date.now()}`;
 
     const container = document.getElementById('pdfPreviewContainer');
@@ -618,7 +622,11 @@ async function enviarPdfPorCorreo() {
     const folio = '<?= htmlspecialchars($folio, ENT_QUOTES) ?>';
     if (!folio) return;
 
-    const API_URL = window.location.protocol + '//' + window.location.hostname + ':3000';
+    // HTTPS (producción) → same-origin (nginx proxy a localhost:3000)
+    // HTTP (dev local)   → puerto 3000 explícito
+    const API_URL = window.location.protocol === 'https:'
+        ? window.location.origin
+        : window.location.protocol + '//' + window.location.hostname + ':3000';
 
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
