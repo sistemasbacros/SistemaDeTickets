@@ -19,7 +19,12 @@ require_once __DIR__ . '/login_rate_limit.php';
 ini_set('session.cookie_httponly', 1);
 ini_set('session.cookie_secure', 1); // HTTPS forzado por Cloudflare/nginx
 ini_set('session.use_strict_mode', 1);
-ini_set('session.cookie_samesite', 'Strict');
+// SameSite=Lax (no Strict): cuando el usuario llega desde un email link
+// (cross-site nav), Strict NO envía la cookie de sesión → el server
+// crea una sesión nueva con CSRF distinto → mismatch en el POST de login.
+// Lax permite top-level navigation manteniendo protección contra CSRF
+// de subrequests (img, iframe, fetch). Es el estándar para forms de login.
+ini_set('session.cookie_samesite', 'Lax');
 ini_set('session.use_only_cookies', 1);
 
 // INICIAR SESIÓN CON CONFIGURACIÓN SEGURA
@@ -1217,7 +1222,7 @@ ob_end_flush();
                     <strong>🛡️ Seguridad de Sesión:</strong><br>
                     ✅ Cookie HTTPOnly activada<br>
                     ✅ Modo estricto de sesión activado<br>
-                    ✅ SameSite Strict configurado<br>
+                    ✅ SameSite Lax configurado<br>
                     ✅ Token CSRF implementado<br>
                     ✅ Verificación de origen (login_source)<br>
                     ✅ Prevención de cache activa<br>

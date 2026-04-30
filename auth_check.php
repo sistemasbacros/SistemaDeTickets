@@ -23,11 +23,14 @@ declare(strict_types=1);
 // Defensive: clean any stray output buffer
 if (function_exists('ob_get_level') && ob_get_level()) { @ob_end_clean(); }
 
-// Cookie hardening (must run BEFORE session_start)
+// Cookie hardening (must run BEFORE session_start).
+// SameSite=Lax (no Strict): consistente con Loginti.php — Strict bloqueaba
+// la cookie cuando el usuario llegaba desde un email link (cross-site nav)
+// causando "Error de seguridad" en el POST de login.
 ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_secure',   '1');
 ini_set('session.use_strict_mode', '1');
-ini_set('session.cookie_samesite', 'Strict');
+ini_set('session.cookie_samesite', 'Lax');
 ini_set('session.use_only_cookies','1');
 
 if (session_status() === PHP_SESSION_NONE) {

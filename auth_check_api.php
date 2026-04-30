@@ -21,7 +21,9 @@ if (function_exists('ob_get_level') && ob_get_level()) { @ob_end_clean(); }
 ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_secure',   '1');
 ini_set('session.use_strict_mode', '1');
-ini_set('session.cookie_samesite', 'Strict');
+// Lax para mantener consistencia con Loginti.php / auth_check.php — si esto
+// queda en Strict y los otros en Lax, las cookies se pisan y rompen sesión.
+ini_set('session.cookie_samesite', 'Lax');
 ini_set('session.use_only_cookies','1');
 
 if (session_status() === PHP_SESSION_NONE) {
