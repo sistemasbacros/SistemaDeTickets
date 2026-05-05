@@ -441,6 +441,22 @@ async function cargarDatos() {
                                      est === 'Rechazado' ? '#dc3545' :
                                      est === 'En Proceso' ? '#0066cc' : '#6c757d';
 
+        // Solo se puede reconfigurar mientras está en Borrador o Pendiente.
+        // El backend rechaza con 400 cualquier otro estatus.
+        const editable = est === 'Borrador' || est === 'Pendiente';
+        if (!editable) {
+            const btnCfg = document.getElementById('btnConfigurar');
+            btnCfg.disabled = true;
+            btnCfg.style.cursor = 'not-allowed';
+            btnCfg.style.opacity = '0.6';
+            btnCfg.innerHTML = '<i class="fas fa-lock"></i> Solicitud cerrada — no se puede reconfigurar';
+            btnCfg.insertAdjacentHTML('beforebegin',
+                `<div class="alert-danger" style="margin-bottom:14px">
+                    Esta solicitud está en estatus <strong>${est}</strong> y ya no puede modificarse.
+                    Si necesitás cambios, creá una nueva solicitud de baja.
+                </div>`);
+        }
+
         // Mostrar tarjeta con datos del empleado que se da de baja
         const nombreCompleto = [solicitud.emp_nombre, solicitud.emp_apellido_paterno, solicitud.emp_apellido_materno].filter(Boolean).join(' ');
         document.getElementById('empNombreCompleto').textContent = nombreCompleto || '---';
