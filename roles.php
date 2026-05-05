@@ -34,6 +34,8 @@ $ROLES = [
         'alfredo.rosales',
         'luis.romero',
         'ariel.antonio',
+        'boris.ramirez',
+        'boris.kelvin',
     ],
     'soporte' => [
         // Same admins for now; expand as needed.
@@ -41,6 +43,8 @@ $ROLES = [
         'alfredo.rosales',
         'luis.romero',
         'ariel.antonio',
+        'boris.ramirez',
+        'boris.kelvin',
     ],
     'rh' => [
         // Add HR users here when you have them.
