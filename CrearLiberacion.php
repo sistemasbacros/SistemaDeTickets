@@ -1,6 +1,13 @@
 <?php
+// DEPRECATED 2026-05-05: sistema reemplazado por Solicitud de Baja v2
+// (BCR-TH-SGI-FO-27 con conceptos por area y firmantes configurables).
+// Redireccion 301 — los clientes/buscadores actualizan la URL.
+http_response_code(301);
+header('Location: CrearSolicitudBaja.php');
+exit;
+
 /**
- * @file CrearLiberacion.php
+ * @file CrearLiberacion.php (DEPRECATED — ver CrearSolicitudBaja.php)
  * @brief Formulario para iniciar una solicitud de Liberación de Responsabilidades.
  *
  * RH captura los datos del empleado que causa baja y hace POST al API.

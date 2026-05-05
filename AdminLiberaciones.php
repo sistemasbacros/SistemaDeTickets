@@ -1,6 +1,13 @@
 <?php
+// DEPRECATED 2026-05-05: sistema reemplazado por Solicitud de Baja v2
+// (BCR-TH-SGI-FO-27 con conceptos por area y firmantes configurables).
+// Redireccion 301 al listado nuevo.
+http_response_code(301);
+header('Location: ListadoSolicitudesBaja.php');
+exit;
+
 /**
- * @file AdminLiberaciones.php
+ * @file AdminLiberaciones.php (DEPRECATED — ver ListadoSolicitudesBaja.php)
  * @brief Lista administrativa de todas las solicitudes de Liberación de Responsabilidades.
  *
  * Consulta GET /api/TicketBacros/liberacion con filtros opcionales por estatus e id_empleado.

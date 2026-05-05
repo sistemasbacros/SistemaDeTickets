@@ -1,6 +1,15 @@
 <?php
+// DEPRECATED 2026-05-05: sistema reemplazado por Solicitud de Baja v2
+// (BCR-TH-SGI-FO-27 con conceptos por area y firmantes configurables).
+// Los folios LIB-* del sistema viejo no tienen equivalente directo en el
+// nuevo, por eso redirigimos al listado del sistema nuevo en vez de a un
+// detalle especifico.
+http_response_code(301);
+header('Location: ListadoSolicitudesBaja.php');
+exit;
+
 /**
- * @file EstadoLiberacion.php
+ * @file EstadoLiberacion.php (DEPRECATED — ver DetalleSolicitudBaja.php)
  * @brief Muestra el estado actual de una solicitud de Liberación de Responsabilidades.
  *
  * Recibe el folio por GET y consulta GET /api/TicketBacros/liberacion/{folio}.

@@ -1,6 +1,40 @@
 <?php
+// DEPRECATED 2026-05-05: sistema reemplazado por Solicitud de Baja v2
+// (BCR-TH-SGI-FO-27 con conceptos por area y firmantes configurables).
+// Los tokens del sistema viejo NO funcionan en el nuevo (tablas distintas).
+// Mostramos pagina de aviso 410 con mensaje claro en vez de redirect ciego,
+// para que el firmante entienda por que su link viejo no funciona.
+http_response_code(410); // Gone
+?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Sistema descontinuado — Liberación de Responsabilidades</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:640px;margin:60px auto;padding:0 20px;color:#222}
+h1{color:#c00}
+.box{background:#fff8e1;border-left:4px solid #ffa000;padding:16px 20px;border-radius:4px;margin:24px 0}
+a{color:#0066cc}
+</style>
+</head>
+<body>
+<h1>Este link ya no es válido</h1>
+<div class="box">
+  <p>El sistema de <strong>Liberación de Responsabilidades v1</strong> fue
+     reemplazado el 5 de mayo de 2026 por <strong>Solicitud de Baja v2</strong>
+     (BCR-TH-SGI-FO-27).</p>
+  <p>Si tienes una solicitud pendiente de firmar, espera el nuevo correo con
+     un link actualizado o contacta al área de Talento Humano.</p>
+</div>
+<p>Si crees que recibiste este mensaje por error, escribe a
+   <a href="mailto:soporte@bacrocorp.com">soporte@bacrocorp.com</a>
+   indicando el folio del email.</p>
+<?php exit; ?>
+
+<?php
 /**
- * @file FirmarLiberacion.php
+ * @file FirmarLiberacion.php (DEPRECATED — ver FirmarSolicitudBaja.php)
  * @brief Página de firma para jefes que reciben el link por correo.
  *
  * URL de entrada: FirmarLiberacion.php?folio=LIB-2026-XXXX&token=abc123...
