@@ -489,7 +489,7 @@ h2 {
                         </div>
 
                         <?php if (!empty($f['firma_img'])): ?>
-                            <img src="<?= htmlspecialchars(getApiUrl() . '/api/TicketBacros/firmas/' . $f['firma_img']) ?>"
+                            <img src="<?= htmlspecialchars('/api/TicketBacros/firmas/' . $f['firma_img']) ?>"
                                  alt="Firma" class="firma-thumb" />
                         <?php endif; ?>
                     </div>
@@ -532,7 +532,7 @@ h2 {
                             </div>
                         </div>
                         <?php if (!empty($f['firma_img'])): ?>
-                            <img src="<?= htmlspecialchars(getApiUrl() . '/api/TicketBacros/firmas/' . $f['firma_img']) ?>" class="firma-thumb" />
+                            <img src="<?= htmlspecialchars('/api/TicketBacros/firmas/' . $f['firma_img']) ?>" class="firma-thumb" />
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
