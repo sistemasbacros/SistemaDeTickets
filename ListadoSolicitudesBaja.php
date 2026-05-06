@@ -8,6 +8,8 @@
  */
 
 require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/roles.php';
+require_jefe_area_strict();   // Solo usuarios en dbo.JefesArea (sin fallback)
 require_once __DIR__ . '/config.php';
 
 function getApiUrl(): string {

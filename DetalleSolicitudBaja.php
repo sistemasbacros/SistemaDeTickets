@@ -8,6 +8,8 @@
  */
 
 require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/roles.php';
+require_jefe_area_strict();   // Solo usuarios en dbo.JefesArea (sin fallback)
 require_once __DIR__ . '/config.php';
 
 function getApiUrl(): string {
@@ -358,6 +360,12 @@ h2 {
             <span class="emp-label">Departamento:</span>
             <span class="emp-val"><?= htmlspecialchars($sol['emp_departamento'] ?? '-') ?></span>
 
+            <span class="emp-label">Correo:</span>
+            <span class="emp-val"><?= htmlspecialchars($sol['emp_correo'] ?? '-') ?></span>
+
+            <span class="emp-label">Fecha Ingreso:</span>
+            <span class="emp-val"><?= htmlspecialchars($sol['emp_fecha_ingreso'] ?? '-') ?></span>
+
             <span class="emp-label">Fecha Salida:</span>
             <span class="emp-val"><?= htmlspecialchars($sol['fecha_salida'] ?? '-') ?></span>
 
@@ -367,8 +375,25 @@ h2 {
             <span class="emp-label">Jefe Directo:</span>
             <span class="emp-val"><?= htmlspecialchars($sol['jefe_directo'] ?? '-') ?></span>
 
-            <span class="emp-label">Fecha Creacion:</span>
+            <span class="emp-label">Carácter:</span>
+            <span class="emp-val"><?= htmlspecialchars($sol['caracter'] ?? '-') ?></span>
+
+            <span class="emp-label">Tipo de Solicitud:</span>
+            <span class="emp-val"><?= htmlspecialchars($sol['tipo_solicitud'] ?? '-') ?></span>
+
+            <span class="emp-label">Recepción Sistemas:</span>
+            <span class="emp-val"><?= htmlspecialchars($sol['fecha_recepcion_sistemas'] ?? '-') ?></span>
+
+            <span class="emp-label">Respondedor:</span>
+            <span class="emp-val"><?= htmlspecialchars($sol['respondedor'] ?? '-') ?></span>
+
+            <span class="emp-label">Fecha Creación:</span>
             <span class="emp-val"><?= htmlspecialchars(substr($sol['fecha_creacion'] ?? '', 0, 16)) ?></span>
+
+            <?php if (!empty($sol['fecha_modificacion'])): ?>
+                <span class="emp-label">Última Modificación:</span>
+                <span class="emp-val"><?= htmlspecialchars(substr($sol['fecha_modificacion'], 0, 16)) ?></span>
+            <?php endif; ?>
         </div>
 
         <!-- Barra de progreso general -->

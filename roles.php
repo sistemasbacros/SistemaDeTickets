@@ -181,6 +181,62 @@ if (!function_exists('user_has_role')) {
     }
 }
 
+if (!function_exists('user_is_jefe_area')) {
+    /**
+     * Estricto: el usuario actual está en dbo.JefesArea (Activo=1)?
+     * NO usa fallback hardcoded — solo la tabla cuenta. Útil para pantallas
+     * de detalle/listado de solicitudes de baja, donde queremos que solo
+     * los jefes registrados las vean (no los superadmins de TI por defecto).
+     */
+    function user_is_jefe_area(): bool {
+        $me = current_username();
+        if ($me === '') return false;
+        return in_array($me, jefes_area_usernames(), true);
+    }
+}
+
+if (!function_exists('require_jefe_area_strict')) {
+    /**
+     * Block 403 si el usuario NO está en dbo.JefesArea (Activo=1).
+     * Más estricto que require_role('admin') porque no respeta el fallback
+     * hardcoded. Para usar en DetalleSolicitudBaja y ListadoSolicitudesBaja.
+     */
+    function require_jefe_area_strict(): void {
+        if (user_is_jefe_area()) {
+            return;
+        }
+        @error_log(sprintf(
+            'JEFE_AREA_DENY ip=%s user=%s target=%s',
+            $_SERVER['REMOTE_ADDR'] ?? '-',
+            current_username(),
+            basename($_SERVER['SCRIPT_NAME'] ?? '-')
+        ));
+
+        $isJson = (
+            str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') ||
+            !empty($_SERVER['HTTP_X_REQUESTED_WITH']) ||
+            str_starts_with($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')
+        );
+
+        if ($isJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(403);
+            echo json_encode(['error' => 'forbidden_not_jefe_area'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        http_response_code(403);
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>';
+        echo '<h1>403 — Acceso restringido</h1>';
+        echo '<p>Esta pantalla está restringida a Jefes de Área registrados '
+           . 'en el catálogo (dbo.JefesArea). Si necesitas acceso, contacta '
+           . 'al área de Sistemas para que te registren.</p>';
+        echo '<p><a href="IniSoport.php">Volver al inicio</a></p>';
+        exit;
+    }
+}
+
 if (!function_exists('require_role')) {
     /**
      * Block the request with HTTP 403 if the current user lacks the role.
