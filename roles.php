@@ -200,15 +200,21 @@ if (!function_exists('require_jefe_area_strict')) {
      * Block 403 si el usuario NO está en dbo.JefesArea (Activo=1).
      * Más estricto que require_role('admin') porque no respeta el fallback
      * hardcoded. Para usar en DetalleSolicitudBaja y ListadoSolicitudesBaja.
+     *
+     * Si el usuario actual NO es jefe de área:
+     *   - API/JSON: 403 con {error: forbidden_not_jefe_area}
+     *   - Pantalla HTML: 403 con página estilizada que explica al usuario
+     *     que solicite acceso a su administrador.
      */
     function require_jefe_area_strict(): void {
         if (user_is_jefe_area()) {
             return;
         }
+        $me = current_username();
         @error_log(sprintf(
             'JEFE_AREA_DENY ip=%s user=%s target=%s',
             $_SERVER['REMOTE_ADDR'] ?? '-',
-            current_username(),
+            $me,
             basename($_SERVER['SCRIPT_NAME'] ?? '-')
         ));
 
@@ -225,14 +231,88 @@ if (!function_exists('require_jefe_area_strict')) {
             exit;
         }
 
+        $userDisplay  = $_SESSION['user_name'] ?? $me;
+        $pantalla     = basename($_SERVER['SCRIPT_NAME'] ?? '');
+        $userDisplayE = htmlspecialchars($userDisplay, ENT_QUOTES, 'UTF-8');
+        $pantallaE    = htmlspecialchars($pantalla,    ENT_QUOTES, 'UTF-8');
+
         http_response_code(403);
         header('Content-Type: text/html; charset=utf-8');
-        echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>';
-        echo '<h1>403 — Acceso restringido</h1>';
-        echo '<p>Esta pantalla está restringida a Jefes de Área registrados '
-           . 'en el catálogo (dbo.JefesArea). Si necesitas acceso, contacta '
-           . 'al área de Sistemas para que te registren.</p>';
-        echo '<p><a href="IniSoport.php">Volver al inicio</a></p>';
+        echo <<<HTML
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Acceso restringido — BACROCORP</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#f4f6fb;color:#1a1a2e;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.box{background:#fff;max-width:560px;width:100%;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.08);padding:36px 38px;text-align:center;border-top:6px solid #dc3545}
+.icon-wrap{width:80px;height:80px;background:linear-gradient(135deg,#fde2e4,#fecdd2);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+.icon-wrap i{color:#b00020;font-size:2.2rem}
+h1{font-size:1.5rem;color:#001550;margin:0 0 8px}
+.subtitle{color:#666;margin:0 0 22px;font-size:.97rem}
+.user-tag{background:#f0f3f8;border-radius:8px;padding:10px 14px;font-size:.86rem;color:#444;margin:0 0 22px;display:inline-flex;align-items:center;gap:8px}
+.user-tag strong{color:#0033cc}
+.msg{background:#fff8e1;border-left:4px solid #f4a300;padding:14px 18px;border-radius:6px;font-size:.92rem;color:#7a4f00;text-align:left;margin:0 0 22px}
+.msg strong{color:#5c3c00;display:block;margin-bottom:4px}
+.contact-info{font-size:.88rem;color:#555;margin:0 0 24px;line-height:1.6}
+.contact-info a{color:#0033cc;text-decoration:none;font-weight:500}
+.contact-info a:hover{text-decoration:underline}
+.actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:8px;font-weight:600;font-size:.92rem;text-decoration:none;transition:.2s;border:0;cursor:pointer}
+.btn-primary{background:linear-gradient(120deg,#0033cc,#0a3dd4);color:#fff;box-shadow:0 4px 12px rgba(0,51,204,.28)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,51,204,.4)}
+.btn-secondary{background:#fff;color:#0033cc;border:2px solid #0033cc}
+.btn-secondary:hover{background:#f0f4ff}
+.footer{margin-top:24px;font-size:.78rem;color:#999;border-top:1px solid #eee;padding-top:14px}
+.footer code{background:#f0f3f8;padding:2px 6px;border-radius:3px;font-family:Consolas,monospace}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="icon-wrap"><i class="fas fa-lock"></i></div>
+  <h1>No tienes permiso para acceder</h1>
+  <p class="subtitle">Esta pantalla es exclusiva para Jefes de Área registrados.</p>
+
+  <div class="user-tag">
+    <i class="fas fa-user"></i>
+    Sesión activa: <strong>{$userDisplayE}</strong>
+  </div>
+
+  <div class="msg">
+    <strong><i class="fas fa-info-circle"></i> ¿Qué puedo hacer?</strong>
+    Solicita a tu administrador que te registre como Jefe de Área en el
+    catálogo del sistema. Solo los usuarios incluidos ahí (con estatus
+    Activo) pueden ver y gestionar las solicitudes de baja.
+  </div>
+
+  <div class="contact-info">
+    <strong>Contacto para solicitar acceso:</strong><br>
+    <i class="fas fa-envelope"></i>
+    <a href="mailto:soporte@bacrocorp.com?subject=Solicitud%20de%20acceso%20a%20{$pantallaE}">soporte@bacrocorp.com</a>
+    <br>
+    <span style="font-size:.82rem;color:#888">Indica tu usuario, área y la pantalla a la que necesitas acceso.</span>
+  </div>
+
+  <div class="actions">
+    <a class="btn btn-primary" href="IniSoport.php">
+      <i class="fas fa-house"></i> Volver al inicio
+    </a>
+    <a class="btn btn-secondary" href="javascript:history.back()">
+      <i class="fas fa-arrow-left"></i> Atrás
+    </a>
+  </div>
+
+  <div class="footer">
+    Pantalla: <code>{$pantallaE}</code>
+    &nbsp;·&nbsp; Estado: <code>403 Forbidden</code>
+  </div>
+</div>
+</body>
+</html>
+HTML;
         exit;
     }
 }
