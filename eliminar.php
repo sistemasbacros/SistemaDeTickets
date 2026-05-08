@@ -1,41 +1,7 @@
 <?php
-session_set_cookie_params([
-    'lifetime' => 0,
-    'path' => '/',
-    'domain' => '',
-    'secure' => false,
-    'httponly' => true,
-    'samesite' => 'Strict'
-]);
-
 header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
-
-session_start();
-
-if (isset($_GET['logout']) && $_GET['logout'] === 'true') {
-    $_SESSION = array();
-    session_destroy();
-    header("Location: Admiin.php");
-    exit;
-}
-
-$isAuthenticated = (
-    isset($_SESSION['authenticated_from_login']) &&
-    $_SESSION['authenticated_from_login'] === true &&
-    isset($_SESSION['session_id']) &&
-    $_SESSION['session_id'] === session_id() &&
-    isset($_SESSION['browser_fingerprint']) &&
-    $_SESSION['browser_fingerprint'] === md5($_SERVER['HTTP_USER_AGENT'] . $_SERVER['REMOTE_ADDR'])
-);
-
-if (!$isAuthenticated) {
-    session_unset();
-    session_destroy();
-    header("Location: Admiin.php");
-    exit;
-}
 
 // Rango de fechas: por defecto últimos 7 días
 if (isset($_GET['fecha_inicio']) && isset($_GET['fecha_fin'])) {
