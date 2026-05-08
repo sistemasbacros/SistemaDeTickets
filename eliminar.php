@@ -3,103 +3,90 @@ header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
 
-// Rango de fechas: por defecto últimos 7 días
-if (isset($_GET['fecha_inicio']) && isset($_GET['fecha_fin'])) {
-    $fecha_inicio = $_GET['fecha_inicio'];
-    $fecha_fin    = $_GET['fecha_fin'];
-} else {
-    $fecha_fin    = date('Y-m-d');
-    $fecha_inicio = date('Y-m-d', strtotime('-7 days'));
-}
+$serverName = '192.168.100.95,1433';
+$connInfo   = [
+    'Database'               => 'Comedor',
+    'UID'                    => 'Larome03',
+    'PWD'                    => 'Larome03',
+    'CharacterSet'           => 'UTF-8',
+    'Encrypt'                => false,
+    'TrustServerCertificate' => true,
+];
 
-if (strtotime($fecha_inicio) > strtotime($fecha_fin)) {
-    $fecha_inicio = $fecha_fin;
-}
-
-$registros       = [];
-$resumen_persona = [];
-$total_desayunos = 0;
-$total_comidas   = 0;
-$error_msg       = '';
+$pedidos            = [];
+$resumen_por_dia    = [];
+$fechas_disponibles = [];
+$fecha_seleccionada = $_GET['fecha'] ?? '';
+$error_msg          = '';
+$total_desayunos    = 0;
+$total_comidas      = 0;
 
 try {
-    $serverName = '192.168.100.95,1433';
-    $connInfo   = [
-        'Database'               => 'Comedor',
-        'UID'                    => 'Larome03',
-        'PWD'                    => 'Larome03',
-        'CharacterSet'           => 'UTF-8',
-        'Encrypt'                => false,
-        'TrustServerCertificate' => true,
-    ];
     $conn = sqlsrv_connect($serverName, $connInfo);
-
     if ($conn === false) {
-        throw new Exception("No se pudo conectar a la base de datos: " . print_r(sqlsrv_errors(), true));
+        throw new Exception("No se pudo conectar a la base de datos.");
     }
 
-    // Detalle de cada entrada en el periodo
-    $sql_detalle = "
-        SELECT
-            nombre,
-            convert(varchar, Hora_Entrada, 103) AS Fecha,
-            convert(varchar, Hora_Entrada, 108) AS Hora,
-            CASE WHEN CAST(Fecha AS TIME) < '12:00:00' THEN 'Desayuno' ELSE 'Comida' END AS TipoComida
-        FROM Entradas
-        WHERE nombre <> '.' AND nombre <> '' AND nombre NOT LIKE '[0-9]%'
-          AND convert(date, Hora_Entrada, 103) BETWEEN ? AND ?
-        ORDER BY Hora_Entrada DESC
-    ";
-    $stmt = sqlsrv_query($conn, $sql_detalle, [$fecha_inicio, $fecha_fin]);
-    if ($stmt === false) {
-        throw new Exception("Error en consulta de detalle: " . print_r(sqlsrv_errors(), true));
-    }
-    while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
-        $registros[] = $row;
-        if ($row['TipoComida'] === 'Desayuno') {
-            $total_desayunos++;
-        } else {
-            $total_comidas++;
+    // Fechas distintas registradas en PedidosComida
+    $stmt_fechas = sqlsrv_query($conn, "SELECT DISTINCT Fecha FROM PedidosComida ORDER BY Fecha DESC");
+    if ($stmt_fechas) {
+        while ($row = sqlsrv_fetch_array($stmt_fechas, SQLSRV_FETCH_ASSOC)) {
+            $f = $row['Fecha'];
+            if ($f instanceof DateTime) $f = $f->format('Y-m-d');
+            $fechas_disponibles[] = $f;
         }
+        sqlsrv_free_stmt($stmt_fechas);
     }
-    sqlsrv_free_stmt($stmt);
 
-    // Resumen por persona
-    $sql_resumen = "
-        SELECT
-            nombre,
-            COUNT(CASE WHEN CAST(Fecha AS TIME) < '12:00:00' THEN 1 END) AS Desayunos,
-            COUNT(CASE WHEN CAST(Fecha AS TIME) >= '12:00:00' THEN 1 END) AS Comidas,
-            COUNT(*) AS Total
-        FROM Entradas
-        WHERE nombre <> '.' AND nombre <> '' AND nombre NOT LIKE '[0-9]%'
-          AND convert(date, Hora_Entrada, 103) BETWEEN ? AND ?
-        GROUP BY nombre
-        ORDER BY Total DESC
-    ";
-    $stmt2 = sqlsrv_query($conn, $sql_resumen, [$fecha_inicio, $fecha_fin]);
-    if ($stmt2 === false) {
-        throw new Exception("Error en consulta de resumen: " . print_r(sqlsrv_errors(), true));
+    if (empty($fecha_seleccionada) && !empty($fechas_disponibles)) {
+        $fecha_seleccionada = $fechas_disponibles[0];
     }
-    while ($row = sqlsrv_fetch_array($stmt2, SQLSRV_FETCH_ASSOC)) {
-        $resumen_persona[] = $row;
+
+    if (!empty($fecha_seleccionada)) {
+        $sql = "
+            SELECT Id_Empleado, Usuario, Fecha,
+                   Lunes, Martes, Miercoles, Jueves, Viernes, Costo
+            FROM PedidosComida
+            WHERE Fecha = ?
+            ORDER BY Usuario, Id_Empleado
+        ";
+        $stmt = sqlsrv_query($conn, $sql, [$fecha_seleccionada]);
+        if ($stmt === false) throw new Exception("Error al consultar PedidosComida.");
+        while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+            if ($row['Fecha'] instanceof DateTime) $row['Fecha'] = $row['Fecha']->format('Y-m-d');
+            $pedidos[] = $row;
+            foreach (['Lunes','Martes','Miercoles','Jueves','Viernes'] as $dia) {
+                if (!empty($row[$dia])) {
+                    if (!isset($resumen_por_dia[$dia])) $resumen_por_dia[$dia] = ['Desayuno'=>0,'Comida'=>0];
+                    $tipo = $row[$dia];
+                    if (isset($resumen_por_dia[$dia][$tipo])) $resumen_por_dia[$dia][$tipo]++;
+                    if ($tipo === 'Desayuno') $total_desayunos++;
+                    elseif ($tipo === 'Comida') $total_comidas++;
+                }
+            }
+        }
+        sqlsrv_free_stmt($stmt);
     }
-    sqlsrv_free_stmt($stmt2);
 
     sqlsrv_close($conn);
-
 } catch (Exception $e) {
     $error_msg = $e->getMessage();
 }
 
-$total_registros = $total_desayunos + $total_comidas;
+$total_pedidos = count($pedidos);
+
+function fmt($fecha) {
+    if (empty($fecha)) return '';
+    $d = DateTime::createFromFormat('Y-m-d', $fecha);
+    return $d ? $d->format('d/m/Y') : $fecha;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro de Comidas y Desayunos</title>
+    <title>Pedidos Comedor</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
@@ -111,14 +98,15 @@ $total_registros = $total_desayunos + $total_comidas;
         .tab-content { background: #fff; border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 8px 8px; padding: 20px; }
         .nav-tabs .nav-link.active { font-weight: 600; }
         .badge-desayuno { background: #f39c12; }
-        .badge-comida   { background: #27ae60; }
+        .badge-comida { background: #27ae60; }
+        select.fecha-select { font-size: 1rem; border-radius: 8px; border: 1px solid #ced4da; padding: 8px 14px; }
     </style>
 </head>
 <body>
 
 <div class="page-header d-flex justify-content-between align-items-center">
     <div>
-        <h4 class="mb-0">Registro de Comidas y Desayunos</h4>
+        <h4 class="mb-0">Pedidos del Comedor</h4>
         <small class="opacity-75">Sistema Comedor &mdash; BacroCorp</small>
     </div>
     <a href="Admiin.php" class="btn btn-outline-light btn-sm">← Regresar</a>
@@ -130,39 +118,52 @@ $total_registros = $total_desayunos + $total_comidas;
         <div class="alert alert-danger"><?= htmlspecialchars($error_msg) ?></div>
     <?php endif; ?>
 
-    <!-- Filtro de fechas -->
+    <!-- Selector de semana/fecha registrada -->
     <div class="card shadow-sm mb-4">
         <div class="card-body">
             <form method="GET" class="row g-3 align-items-end">
                 <div class="col-auto">
-                    <label class="form-label fw-semibold">Fecha inicio</label>
-                    <input type="date" name="fecha_inicio" class="form-control"
-                           value="<?= htmlspecialchars($fecha_inicio) ?>">
+                    <label class="form-label fw-semibold">Seleccionar semana registrada</label>
+                    <select name="fecha" class="fecha-select" onchange="this.form.submit()">
+                        <option value="">-- Elige una semana --</option>
+                        <?php foreach ($fechas_disponibles as $f): ?>
+                            <option value="<?= htmlspecialchars($f) ?>" <?= $f === $fecha_seleccionada ? 'selected' : '' ?>>
+                                <?= fmt($f) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
-                <div class="col-auto">
-                    <label class="form-label fw-semibold">Fecha fin</label>
-                    <input type="date" name="fecha_fin" class="form-control"
-                           value="<?= htmlspecialchars($fecha_fin) ?>">
+                <?php if (!empty($fecha_seleccionada)): ?>
+                <div class="col-auto align-self-end">
+                    <span class="text-muted">Semana: <strong><?= fmt($fecha_seleccionada) ?></strong></span>
                 </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-primary">Consultar</button>
-                </div>
-                <div class="col-auto">
-                    <a href="RegistroComidas.php" class="btn btn-outline-secondary">Últimos 7 días</a>
-                </div>
+                <?php endif; ?>
             </form>
         </div>
     </div>
+
+    <?php if (!empty($fecha_seleccionada)): ?>
 
     <!-- Tarjetas resumen -->
     <div class="row g-3 mb-4">
         <div class="col-md-4">
             <div class="card card-stat">
                 <div class="card-body d-flex align-items-center gap-3">
+                    <span class="stat-icon">👤</span>
+                    <div>
+                        <div class="text-muted small">Pedidos registrados</div>
+                        <div class="fs-2 fw-bold text-primary"><?= $total_pedidos ?></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card card-stat">
+                <div class="card-body d-flex align-items-center gap-3">
                     <span class="stat-icon">🍳</span>
                     <div>
-                        <div class="text-muted small">Desayunos servidos</div>
-                        <div class="fs-2 fw-bold text-warning"><?= number_format($total_desayunos) ?></div>
+                        <div class="text-muted small">Desayunos totales</div>
+                        <div class="fs-2 fw-bold text-warning"><?= $total_desayunos ?></div>
                     </div>
                 </div>
             </div>
@@ -172,91 +173,87 @@ $total_registros = $total_desayunos + $total_comidas;
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="stat-icon">🍽️</span>
                     <div>
-                        <div class="text-muted small">Comidas servidas</div>
-                        <div class="fs-2 fw-bold text-success"><?= number_format($total_comidas) ?></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card card-stat">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <span class="stat-icon">📋</span>
-                    <div>
-                        <div class="text-muted small">Total registros</div>
-                        <div class="fs-2 fw-bold text-primary"><?= number_format($total_registros) ?></div>
+                        <div class="text-muted small">Comidas totales</div>
+                        <div class="fs-2 fw-bold text-success"><?= $total_comidas ?></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Tabs: Detalle / Resumen por persona -->
+    <!-- Tabs -->
     <ul class="nav nav-tabs" id="mainTabs">
         <li class="nav-item">
-            <a class="nav-link active" data-bs-toggle="tab" href="#tab-detalle">Detalle de entradas</a>
+            <a class="nav-link active" data-bs-toggle="tab" href="#tab-detalle">Detalle de pedidos</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link" data-bs-toggle="tab" href="#tab-resumen">Resumen por persona</a>
+            <a class="nav-link" data-bs-toggle="tab" href="#tab-resumen">Resumen por día</a>
         </li>
     </ul>
 
-    <div class="tab-content" id="mainTabContent">
+    <div class="tab-content">
 
-        <!-- Tab detalle -->
         <div class="tab-pane fade show active" id="tab-detalle">
             <table id="tablaDetalle" class="table table-sm table-hover w-100">
                 <thead class="table-dark">
                     <tr>
                         <th>#</th>
-                        <th>Nombre</th>
-                        <th>Fecha</th>
-                        <th>Hora</th>
-                        <th>Tipo</th>
+                        <th>ID Empleado</th>
+                        <th>Usuario</th>
+                        <th>Lunes</th>
+                        <th>Martes</th>
+                        <th>Miércoles</th>
+                        <th>Jueves</th>
+                        <th>Viernes</th>
+                        <th>Costo</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($registros as $i => $r): ?>
+                    <?php foreach ($pedidos as $i => $p): ?>
                     <tr>
                         <td><?= $i + 1 ?></td>
-                        <td><?= htmlspecialchars($r['nombre']) ?></td>
-                        <td><?= htmlspecialchars($r['Fecha']) ?></td>
-                        <td><?= htmlspecialchars($r['Hora']) ?></td>
+                        <td><?= htmlspecialchars($p['Id_Empleado']) ?></td>
+                        <td><?= htmlspecialchars($p['Usuario']) ?></td>
+                        <?php foreach (['Lunes','Martes','Miercoles','Jueves','Viernes'] as $dia): ?>
                         <td>
-                            <?php if ($r['TipoComida'] === 'Desayuno'): ?>
-                                <span class="badge badge-desayuno">Desayuno</span>
+                            <?php if (!empty($p[$dia])): ?>
+                                <?php if ($p[$dia] === 'Desayuno'): ?>
+                                    <span class="badge badge-desayuno">Desayuno</span>
+                                <?php else: ?>
+                                    <span class="badge badge-comida">Comida</span>
+                                <?php endif; ?>
                             <?php else: ?>
-                                <span class="badge badge-comida">Comida</span>
+                                <span class="text-muted">—</span>
                             <?php endif; ?>
                         </td>
+                        <?php endforeach; ?>
+                        <td>$<?= number_format($p['Costo'], 2) ?></td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
 
-        <!-- Tab resumen por persona -->
         <div class="tab-pane fade" id="tab-resumen">
             <table id="tablaResumen" class="table table-sm table-hover w-100">
                 <thead class="table-dark">
                     <tr>
-                        <th>Nombre</th>
+                        <th>Día</th>
                         <th class="text-center">Desayunos</th>
                         <th class="text-center">Comidas</th>
                         <th class="text-center">Total</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($resumen_persona as $p): ?>
+                    <?php foreach (['Lunes','Martes','Miercoles','Jueves','Viernes'] as $dia):
+                        $d = $resumen_por_dia[$dia] ?? ['Desayuno'=>0,'Comida'=>0];
+                        $total_dia = ($d['Desayuno'] ?? 0) + ($d['Comida'] ?? 0);
+                    ?>
                     <tr>
-                        <td><?= htmlspecialchars($p['nombre']) ?></td>
-                        <td class="text-center">
-                            <span class="badge badge-desayuno"><?= $p['Desayunos'] ?></span>
-                        </td>
-                        <td class="text-center">
-                            <span class="badge badge-comida"><?= $p['Comidas'] ?></span>
-                        </td>
-                        <td class="text-center fw-bold"><?= $p['Total'] ?></td>
+                        <td><?= $dia === 'Miercoles' ? 'Miércoles' : $dia ?></td>
+                        <td class="text-center"><span class="badge badge-desayuno"><?= $d['Desayuno'] ?? 0 ?></span></td>
+                        <td class="text-center"><span class="badge badge-comida"><?= $d['Comida'] ?? 0 ?></span></td>
+                        <td class="text-center fw-bold"><?= $total_dia ?></td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -265,14 +262,19 @@ $total_registros = $total_desayunos + $total_comidas;
                         <td>TOTAL</td>
                         <td class="text-center"><?= $total_desayunos ?></td>
                         <td class="text-center"><?= $total_comidas ?></td>
-                        <td class="text-center"><?= $total_registros ?></td>
+                        <td class="text-center"><?= $total_desayunos + $total_comidas ?></td>
                     </tr>
                 </tfoot>
             </table>
         </div>
 
-    </div><!-- /tab-content -->
-</div><!-- /container -->
+    </div>
+
+    <?php else: ?>
+        <div class="alert alert-info">Selecciona una semana para ver los pedidos registrados.</div>
+    <?php endif; ?>
+
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
@@ -285,28 +287,16 @@ $total_registros = $total_desayunos + $total_comidas;
 <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
 <script>
 $(function () {
-    const commonOpts = {
-        language: {
-            url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
-        },
+    const opts = {
+        language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
         dom: 'Bfrtip',
         buttons: [
             { extend: 'excelHtml5', text: '📥 Excel', className: 'btn btn-success btn-sm' },
-            { extend: 'print',      text: '🖨️ Imprimir', className: 'btn btn-secondary btn-sm' }
+            { extend: 'print', text: '🖨️ Imprimir', className: 'btn btn-secondary btn-sm' }
         ]
     };
-
-    $('#tablaDetalle').DataTable({
-        ...commonOpts,
-        pageLength: 25,
-        order: [[2, 'desc'], [3, 'desc']]
-    });
-
-    $('#tablaResumen').DataTable({
-        ...commonOpts,
-        pageLength: 25,
-        order: [[3, 'desc']]
-    });
+    $('#tablaDetalle').DataTable({ ...opts, pageLength: 25 });
+    $('#tablaResumen').DataTable({ ...opts, paging: false, searching: false });
 });
 </script>
 </body>
