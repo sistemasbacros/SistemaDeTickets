@@ -48,10 +48,13 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &&
             $_SESSION['LAST_ACTIVITY'] = time();
 
             if (!isset($_SESSION['session_token']))  $_SESSION['session_token']  = bin2hex(random_bytes(32));
-            if (!isset($_SESSION['last_regeneration']) || (time() - $_SESSION['last_regeneration'] > 300)) {
-                session_regenerate_id(true);
-                $_SESSION['last_regeneration'] = time();
-            }
+            // NOTE: no per-page session id rotation here. This page loads several
+            // module iframes concurrently; rotating (session_regenerate_id(true))
+            // destroys the previous session and, with session.use_strict_mode=1,
+            // logs out the iframe requests still carrying the old cookie -> they
+            // get session_expired and render the login page inside the iframe.
+            // Session id rotation already happens at login (Loginti.php), the
+            // OWASP-recommended privilege-change moment.
         }
     }
 }
