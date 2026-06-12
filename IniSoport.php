@@ -24,7 +24,7 @@ header("Cache-Control: no-cache, no-store, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 header("Expires: Thu, 01 Jan 1970 00:00:00 GMT");
 header("X-Content-Type-Options: nosniff");
-header("X-Frame-Options: DENY");
+header("X-Frame-Options: SAMEORIGIN");
 header("X-XSS-Protection: 1; mode=block");
 
 // SISTEMA DE PERMISOS POR USUARIO
