@@ -48,7 +48,6 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 // Validation
 $ABS_TIMEOUT = 8 * 60 * 60;   // 8h absolute
 $INACT_LIMIT = 30 * 60;       // 30min inactivity
-$REGEN_EVERY = 5 * 60;        // rotate session id every 5min
 
 $valid = (
     !empty($_SESSION['logged_in'])              && $_SESSION['logged_in'] === true &&
@@ -88,12 +87,17 @@ if (!$valid) {
     exit;
 }
 
-// Touch + periodic id rotation
+// Touch last-activity only.
+//
+// IMPORTANT: do NOT rotate the session id here (per-page). The session id is
+// already rotated at login (Loginti.php) on privilege change, which is the
+// OWASP-recommended moment. A periodic session_regenerate_id(true) on every
+// protected page destroys the previous session immediately and, combined with
+// session.use_strict_mode=1, logs out every OTHER request that was sent
+// concurrently with the now-stale cookie. IniSoport.php loads several module
+// iframes at once: the first to rotate wins, the rest get session_expired and
+// render the login page inside the iframe (the "iframe en blanco" bug).
 $_SESSION['LAST_ACTIVITY'] = time();
-if (empty($_SESSION['last_regeneration']) || (time() - $_SESSION['last_regeneration']) > $REGEN_EVERY) {
-    session_regenerate_id(true);
-    $_SESSION['last_regeneration'] = time();
-}
 
 // Convenience handle for pages
 $AUTH_USER = [
