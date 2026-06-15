@@ -73,6 +73,8 @@ try {
     $departamento = $ticketData['Empresa'] ?? '';
     $descripcion = $ticketData['Adjuntos'] ?? '';
     $mensaje = $ticketData['Mensaje'] ?? '';
+	
+	date_default_timezone_set('America/Mexico_City');
 
     // CORRECCIÓN: Formato de fecha para SQL Server (YYYY-MM-DD)
     $fechaActualSQL = date('Y-m-d');

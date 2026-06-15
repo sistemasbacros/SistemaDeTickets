@@ -5,7 +5,6 @@ session_start();
 
 // Verificar si el usuario está autenticado
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    // Redirigir al login si no está autenticado
     header("Location: Loginti.php");
     exit();
 }
@@ -16,88 +15,52 @@ $id_empleado = $_SESSION['user_id'] ?? 'N/A';
 $area_usuario = $_SESSION['user_area'] ?? 'N/A';
 $usuario = $_SESSION['user_username'] ?? 'N/A';
 
-// Obtener los ULTIMOS DOS componentes como apellidos
-$partes_nombre = explode(' ', trim($nombre_usuario));
-$apellidos_usuario = '';
-if (count($partes_nombre) >= 2) {
-    // Tomar los ULTIMOS DOS elementos del array
-    $apellidos_usuario = implode(' ', array_slice($partes_nombre, -2));
+// ===== FUNCIÓN PARA EXTRAER APELLIDOS DE FORMA INTELIGENTE =====
+function extraerApellidos($nombre_completo) {
+    $nombre_completo = trim($nombre_completo);
+    $partes = explode(' ', $nombre_completo);
+    $num_partes = count($partes);
+    
+    if ($num_partes >= 4) return implode(' ', array_slice($partes, 0, 2));
+    if ($num_partes == 3) return implode(' ', array_slice($partes, 0, 2));
+    if ($num_partes == 2) return $partes[0];
+    return $nombre_completo;
 }
 
-$serverName = "DESAROLLO-BACRO\SQLEXPRESS"; // Server de la base de datos
+$apellidos_usuario = extraerApellidos($nombre_usuario);
+$comodines_busqueda = array_unique([$apellidos_usuario, $nombre_usuario]);
+
+$serverName = "DESAROLLO-BACRO\SQLEXPRESS";
 $connectionInfo = array("Database" => "Ticket", "UID" => "Larome03", "PWD" => "Larome03", "CharacterSet" => "UTF-8");
 $conn = sqlsrv_connect($serverName, $connectionInfo);
 
-if (!$conn) {
-    die("Error de conexión: " . print_r(sqlsrv_errors(), true));
-}
+if (!$conn) die("Error de conexión: " . print_r(sqlsrv_errors(), true));
 
-// Obtener los filtros de la solicitud GET
 $nombreFiltro = isset($_GET['nombre']) ? "%" . $_GET['nombre'] . "%" : "%";
 $fechaInicioFiltro = isset($_GET['fecha_inicial']) ? $_GET['fecha_inicial'] : "1900-01-01";
 $fechaFinFiltro = isset($_GET['fecha_final']) ? $_GET['fecha_final'] : "9999-12-31";
 
-// CONSULTA SQL ACTUALIZADA - Incluyendo campos de imagen
 $sql = "SELECT 
-    [Nombre],
-    [Correo],
-    [Prioridad],
-    [Empresa],
-    [Asunto],
-    [Mensaje],
-    [Adjuntos],
+    [Nombre], [Correo], [Prioridad], [Empresa], [Asunto], [Mensaje], [Adjuntos],
     [Fecha] = LTRIM(RTRIM(CAST(CONVERT(DATE, fecha, 103) AS NVARCHAR))),
-    [Hora],
-    [Id_Ticket],
-    [Estatus],
-    [PA],
-    [imagen_url],
-    [imagen_nombre],
-    [imagen_tipo],
-    [imagen_size]
+    [Hora], [Id_Ticket], [Estatus], [PA], [imagen_url], [imagen_nombre], [imagen_tipo], [imagen_size]
 FROM [dbo].[T3] 
 WHERE 
     (CONVERT(DATE, fecha, 103) BETWEEN ? AND ?) 
-    AND (Nombre LIKE ? OR ? = '%')  -- Filtro por nombre si se especifica
-    AND (Nombre LIKE ?)  -- FILTRO OBLIGATORIO por apellidos del usuario
-ORDER BY CONVERT(DATE, fecha, 103)";
+    AND (Nombre LIKE ? OR ? = '%')
+    AND ((Nombre LIKE ?) OR (Nombre LIKE ?))
+ORDER BY CONVERT(DATE, fecha, 103) DESC";
 
-// Parámetros para la consulta
-$params = array(
-    $fechaInicioFiltro, 
-    $fechaFinFiltro, 
-    $nombreFiltro,
-    $nombreFiltro,
-    "%" . $apellidos_usuario . "%"  // FILTRO OBLIGATORIO por apellidos
-);
+$params = array($fechaInicioFiltro, $fechaFinFiltro, $nombreFiltro, $nombreFiltro);
+foreach ($comodines_busqueda as $comodin) $params[] = "%" . $comodin . "%";
 
-// Ejecutar la consulta
 $stmt = sqlsrv_query($conn, $sql, $params);
+if ($stmt === false) die("Error en la consulta SQL: " . print_r(sqlsrv_errors(), true));
 
-// Verificar si hay error en la consulta
-if ($stmt === false) {
-    die("Error en la consulta SQL: " . print_r(sqlsrv_errors(), true));
-}
+$array1 = []; $array2 = []; $array3 = []; $array4 = []; $array5 = []; $array6 = []; $array7 = [];
+$array8 = []; $array9 = []; $array10 = []; $array11 = []; $array12 = [];
+$array13 = []; $array14 = []; $array15 = []; $array16 = [];
 
-// Arreglos para almacenar los resultados
-$array1 = [];
-$array2 = [];
-$array3 = [];
-$array4 = [];
-$array5 = [];
-$array6 = [];
-$array7 = [];
-$array8 = [];
-$array9 = [];
-$array10 = [];
-$array11 = [];
-$array12 = [];
-$array13 = []; // imagen_url
-$array14 = []; // imagen_nombre
-$array15 = []; // imagen_tipo
-$array16 = []; // imagen_size
-
-// URL base para las imágenes
 $base_url = "http://desarollo-bacros/";
 
 while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
@@ -109,36 +72,23 @@ while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
     array_push($array6, $row['Mensaje']);
     array_push($array7, $row['Adjuntos']);
     
-    // Formatear fecha correctamente
     $fecha = $row['Fecha'];
-    if ($fecha instanceof DateTime) {
-        $fecha = $fecha->format('d/m/Y');
-    } else {
-        $fecha = (string)$fecha;
-    }
+    if ($fecha instanceof DateTime) $fecha = $fecha->format('d/m/Y');
+    else $fecha = (string)$fecha;
     array_push($array8, $fecha);
     
-    // Formatear hora
     $hora = $row['Hora'];
-    if ($hora instanceof DateTime) {
-        $hora = $hora->format('H:i:s');
-    } else {
-        $hora = (string)$hora;
-    }
+    if ($hora instanceof DateTime) $hora = $hora->format('H:i:s');
+    else $hora = (string)$hora;
     array_push($array9, $hora);
     
     array_push($array10, $row['Id_Ticket']);
     array_push($array11, $row['Estatus']);
     array_push($array12, $row['PA']);
     
-    // Campos de imagen - IMPORTANTE: Corregir la URL
     $imagen_url = $row['imagen_url'];
-    
-    // Si la URL contiene "../uploads/", reemplazarla con la URL correcta
     if (!empty($imagen_url) && strpos($imagen_url, '../uploads/') !== false) {
-        // Extraer solo el nombre del archivo después de uploads/
         $nombre_archivo = basename($imagen_url);
-        // Crear URL completa: http://desarollo-bacros/uploads/nombre_archivo
         $imagen_url = $base_url . 'uploads/' . $nombre_archivo;
     }
     
@@ -148,39 +98,32 @@ while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
     array_push($array16, $row['imagen_size']);
 }
 
-// Contador de tickets encontrados
 $total_tickets = count($array1);
-
-// Liberar la consulta
 sqlsrv_free_stmt($stmt);
 sqlsrv_close($conn);
 
-// Función para formatear el tamaño del archivo
 function formatFileSize($bytes) {
     if ($bytes == 0 || $bytes === NULL) return '0 Bytes';
-    
     $k = 1024;
     $sizes = ['Bytes', 'KB', 'MB', 'GB'];
     $i = floor(log($bytes) / log($k));
-    
     return number_format($bytes / pow($k, $i), 2) . ' ' . $sizes[$i];
 }
 ?>
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Filtrar Tickets - BacroCorp</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
+    <title>Mis Tickets - BacroCorp</title>
 
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- DataTables Bootstrap 5 -->
+    <!-- Google Fonts - Moderna pero Profesional -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- DataTables -->
     <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
     <!-- SweetAlert2 -->
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet" />
@@ -191,540 +134,878 @@ function formatFileSize($bytes) {
             --navy-secondary: #112240;
             --navy-dark: #020c1b;
             --accent-blue: #64a8ff;
-            --accent-teal: #64ffda;
-            --accent-purple: #7c3aed;
-            --snow-white: #f8fafc;
-            --pearl-white: #f1f5f9;
+            --accent-blue-deep: #3b82f6;
+            --accent-blue-light: #93c5fd;
             --glass-bg: rgba(255, 255, 255, 0.08);
             --glass-border: rgba(255, 255, 255, 0.15);
             --glass-shadow: 0 8px 32px rgba(2, 12, 27, 0.4);
-            --gradient-primary: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-            --gradient-accent: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
-            --gradient-blue: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            --gradient-blue: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            --gradient-blue-soft: linear-gradient(135deg, #2563eb 0%, #60a5fa 100%);
+            --gradient-success: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            --gradient-warning: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+            --gradient-danger: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
             --font-primary: 'Outfit', sans-serif;
-            --font-heading: 'Manrope', sans-serif;
+            --font-heading: 'Inter', sans-serif;
+            --transition: all 0.3s ease;
         }
         
         * {
-            box-sizing: border-box;
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
         }
         
         body {
             background: linear-gradient(135deg, var(--navy-dark) 0%, var(--navy-primary) 50%, var(--navy-secondary) 100%);
-            min-height: 100vh;
             font-family: var(--font-primary);
-            overflow-x: hidden;
             color: white;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-        }
-        
-        .glass-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            box-shadow: var(--glass-shadow);
-            border-radius: 24px;
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 25px;
+            min-height: 100vh;
+            padding: 15px;
         }
         
         .container {
-            width: 100%;
-            max-width: 1400px;
-            margin-top: 10px;
+            max-width: 1600px;
+            margin: 0 auto;
         }
         
-        .header-section {
-            text-align: center;
-            margin-bottom: 30px;
-            position: relative;
-        }
-        
-        .logo-glow {
-            width: 100px;
-            height: 100px;
-            margin: 0 auto 20px;
-            border-radius: 50%;
-            background: var(--gradient-blue);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 36px;
-            position: relative;
-            animation: logoPulse 3s ease-in-out infinite;
-            box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
-        }
-        
-        @keyframes logoPulse {
-            0%, 100% {
-                transform: scale(1);
-                box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
-            }
-            50% {
-                transform: scale(1.03);
-                box-shadow: 0 0 40px rgba(59, 130, 246, 0.6);
-            }
-        }
-        
-        .system-title {
+        /* Tipografía Premium - Moderna y Profesional */
+        h1, h2, h3, h4, h5, h6, .table thead th, .badge-counter, .btn-filter, .ticket-id {
             font-family: var(--font-heading);
-            font-weight: 800;
-            font-size: 2.2rem;
-            margin-bottom: 8px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        
+        body, p, span, div, input, select, textarea, .user-detail, .pattern-tag, .stat-badge {
+            font-family: var(--font-primary);
+            font-weight: 400;
+            letter-spacing: -0.01em;
+        }
+        
+        /* ===== HEADER SUPER COMPACTO ===== */
+        .header-compact {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 15px 25px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+            box-shadow: var(--glass-shadow);
+            border-left: 4px solid var(--accent-blue);
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo-mini {
+            width: 48px;
+            height: 48px;
             background: var(--gradient-blue);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            flex-shrink: 0;
+            box-shadow: 0 6px 15px rgba(59,130,246,0.3);
+        }
+        
+        .title-mini h1 {
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin: 0;
+            background: linear-gradient(135deg, white, var(--accent-blue-light));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            letter-spacing: -0.02em;
-            text-align: center;
+            line-height: 1.2;
         }
         
-        .system-subtitle {
-            font-size: 1rem;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 5px;
-            font-weight: 400;
-            text-align: center;
-            max-width: 500px;
-            margin-left: auto;
-            margin-right: auto;
-            line-height: 1.5;
+        .title-mini p {
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.7);
+            margin: 2px 0 0;
         }
         
-        .security-badge {
+        .header-badges {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .badge-light {
+            background: rgba(59,130,246,0.15);
+            border: 1px solid rgba(59,130,246,0.3);
+            color: var(--accent-blue);
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 600;
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: rgba(59, 130, 246, 0.15);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            color: #dbeafe;
-            padding: 6px 12px;
-            border-radius: 16px;
-            font-size: 0.8rem;
-            font-weight: 500;
-            margin-top: 10px;
-            backdrop-filter: blur(10px);
         }
         
-        .btn-primary {
+        .badge-counter {
             background: var(--gradient-blue);
-            border: none;
             color: white;
-            padding: 12px 25px;
-            border-radius: 14px;
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 0.8rem;
             font-weight: 700;
-            font-family: var(--font-heading);
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 10px rgba(59,130,246,0.3);
+        }
+        
+        /* ===== USER INFO ===== */
+        .user-info-compact {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
+            padding: 15px 25px;
+            margin-bottom: 15px;
+            box-shadow: var(--glass-shadow);
+            border-left: 4px solid var(--accent-blue-light);
+        }
+        
+        .user-details {
+            display: flex;
+            align-items: center;
+            gap: 35px;
+            flex-wrap: wrap;
+        }
+        
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            background: var(--gradient-blue);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.4rem;
+            flex-shrink: 0;
+            box-shadow: 0 6px 15px rgba(59,130,246,0.3);
+        }
+        
+        .user-detail {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             font-size: 1rem;
-            letter-spacing: 0.02em;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 6px 25px rgba(59, 130, 246, 0.3);
         }
         
-        .btn-primary:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 35px rgba(59, 130, 246, 0.4);
-            letter-spacing: 0.03em;
+        .user-detail i {
+            color: var(--accent-blue);
+            width: 20px;
+            font-size: 1.1rem;
         }
         
-        .form-control, .form-select {
-            background: rgba(255, 255, 255, 0.07);
-            border: 2px solid rgba(255, 255, 255, 0.12);
-            color: white;
-            border-radius: 14px;
-            padding: 12px 18px;
-            font-family: var(--font-primary);
-            font-size: 0.95rem;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        .user-detail .label {
+            color: rgba(255,255,255,0.6);
+            font-size: 0.9rem;
         }
         
-        .form-control:focus, .form-select:focus {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: var(--accent-blue);
-            color: white;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-            transform: translateY(-2px);
-            outline: none;
-        }
-        
-        .form-control::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-        }
-        
-        .form-label {
-            font-weight: 600;
+        .user-detail .value {
             font-family: var(--font-heading);
-            margin-bottom: 10px;
-            color: rgba(255, 255, 255, 0.95);
-            font-size: 0.95rem;
+            font-weight: 600;
+            color: white;
+            white-space: normal;
+            word-break: break-word;
+            font-size: 1rem;
+        }
+        
+        /* ===== SEARCH INFO ===== */
+        .search-compact {
+            background: rgba(59,130,246,0.08);
+            border-left: 4px solid var(--accent-blue);
+            border-radius: 16px;
+            padding: 12px 20px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            box-shadow: var(--glass-shadow);
+        }
+        
+        .search-label {
             display: flex;
             align-items: center;
             gap: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--accent-blue);
+            white-space: nowrap;
+        }
+        
+        .pattern-tag {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white;
+            padding: 5px 14px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition);
+        }
+        
+        .pattern-tag:hover {
+            background: rgba(59,130,246,0.2);
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
+        }
+        
+        .pattern-main {
+            background: var(--gradient-blue-soft);
+            border: none;
+            color: white;
+            font-weight: 600;
+        }
+        
+        /* ===== FILTROS COMPACTOS ===== */
+        .filters-compact {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 20px 25px;
+            margin-bottom: 20px;
+            box-shadow: var(--glass-shadow);
+            border-left: 4px solid var(--accent-blue);
+        }
+        
+        .filters-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--accent-blue);
+        }
+        
+        .form-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: rgba(255,255,255,0.8);
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            letter-spacing: 0.5px;
         }
         
         .form-label i {
             color: var(--accent-blue);
-            font-size: 0.85rem;
         }
         
-        .table-responsive {
-            overflow-x: auto;
-            border-radius: 18px;
-            background: rgba(255, 255, 255, 0.03);
-            padding: 20px;
-            box-shadow: var(--glass-shadow);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        
-        table.dataTable {
-            width: 100% !important;
-            font-size: 13px;
-            border-collapse: separate !important;
-            border-spacing: 0;
-        }
-        
-        /* ENCABEZADOS BLANCOS CON TEXTO AZUL - ESTILOS MÁS FUERTES */
-        #ticketsTable thead th {
-            position: sticky !important;
-            top: 0 !important;
-            z-index: 10 !important;
-            background: white !important;
-            background-color: white !important;
-            color: #1e3a8a !important;
-            font-weight: 700 !important;
-            padding: 12px !important;
-            white-space: nowrap !important;
-            border-bottom: 2px solid #3b82f6 !important;
-        }
-        
-        /* TEXTO BLANCO EN LA TABLA */
-        #ticketsTable tbody td {
-            color: white !important;
-            background-color: transparent !important;
-        }
-        
-        .dataTables_wrapper .dataTables_scrollBody {
-            background: transparent !important;
-        }
-        
-        table.dataTable tbody td {
-            padding: 10px !important;
-            vertical-align: middle !important;
-            white-space: nowrap !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-            color: white !important;
-            font-weight: 500 !important;
-            background-color: transparent !important;
-        }
-        
-        table.dataTable tbody tr {
-            background-color: transparent !important;
-        }
-        
-        table.dataTable tbody tr td {
-            color: white !important;
-        }
-        
-        table.dataTable.table-striped > tbody > tr:nth-of-type(odd) > * {
-            background-color: rgba(255, 255, 255, 0.05) !important;
-            color: white !important;
-        }
-        
-        table.dataTable.table-striped > tbody > tr:nth-of-type(even) > * {
-            background-color: transparent !important;
-            color: white !important;
-        }
-        
-        table.dataTable tbody tr:hover td {
-            background-color: rgba(59, 130, 246, 0.3) !important;
-            color: white !important;
-        }
-        
-        .priority-high {
-            background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
-            color: white !important;
-            padding: 4px 10px;
+        .form-control {
+            background: rgba(0,0,0,0.3);
+            border: 2px solid rgba(255,255,255,0.1);
+            color: white;
             border-radius: 12px;
+            padding: 10px 16px;
+            font-size: 0.9rem;
+            width: 100%;
+            transition: var(--transition);
+        }
+        
+        .form-control:focus {
+            border-color: var(--accent-blue);
+            outline: none;
+            background: rgba(0,0,0,0.4);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+        
+        .btn-filter {
+            background: var(--gradient-blue);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 0.85rem;
             font-weight: 600;
+            width: 100%;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .btn-filter:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(59,130,246,0.4);
+        }
+        
+        /* ===== TABLA PREMIUM ===== */
+        .table-wrapper {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 20px 25px;
+            box-shadow: var(--glass-shadow);
+        }
+        
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .table-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .table-title i {
+            color: var(--accent-blue);
+        }
+        
+        .table-stats {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .stat-badge {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 6px 14px;
+            border-radius: 30px;
             font-size: 0.8rem;
+        }
+        
+        /* ENCABEZADOS AZULES */
+        #ticketsTable thead th {
+            background: var(--gradient-blue) !important;
+            color: white !important;
+            font-weight: 700 !important;
+            font-size: 0.8rem !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 14px 10px !important;
+            border: none !important;
+            white-space: nowrap;
+            font-family: var(--font-heading) !important;
+        }
+        
+        #ticketsTable thead th:first-child {
+            border-top-left-radius: 14px;
+            border-bottom-left-radius: 14px;
+        }
+        
+        #ticketsTable thead th:last-child {
+            border-top-right-radius: 14px;
+            border-bottom-right-radius: 14px;
+        }
+        
+        #ticketsTable thead th:not(:last-child) {
+            border-right: 2px solid rgba(255,255,255,0.2) !important;
+        }
+        
+        /* CUERPO */
+        #ticketsTable tbody tr {
+            background: rgba(10,25,47,0.7);
+            transition: var(--transition);
+        }
+        
+        #ticketsTable tbody tr:nth-child(even) {
+            background: rgba(17,34,64,0.7);
+        }
+        
+        #ticketsTable tbody tr:hover {
+            background: rgba(59,130,246,0.2);
+            cursor: pointer;
+        }
+        
+        #ticketsTable tbody td {
+            padding: 12px 10px !important;
+            color: white !important;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.85rem;
+            font-weight: 400;
+        }
+        
+        #ticketsTable tbody td:last-child {
+            border-right: none;
+        }
+        
+        /* BADGES PREMIUM */
+        .priority-high {
+            background: var(--gradient-danger);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-size: 0.7rem;
             display: inline-block;
+            min-width: 65px;
+            text-align: center;
+            font-weight: 600;
         }
         
         .priority-medium {
-            background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
-            color: white !important;
+            background: var(--gradient-warning);
+            color: white;
             padding: 4px 10px;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 0.8rem;
+            border-radius: 30px;
+            font-size: 0.7rem;
             display: inline-block;
+            min-width: 65px;
+            text-align: center;
+            font-weight: 600;
         }
         
         .priority-low {
-            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-            color: white !important;
+            background: var(--gradient-success);
+            color: white;
             padding: 4px 10px;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 0.8rem;
+            border-radius: 30px;
+            font-size: 0.7rem;
             display: inline-block;
+            min-width: 65px;
+            text-align: center;
+            font-weight: 600;
         }
         
         .status-open {
-            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-            color: white !important;
+            background: var(--gradient-blue);
+            color: white;
             padding: 4px 10px;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 0.8rem;
+            border-radius: 30px;
+            font-size: 0.7rem;
             display: inline-block;
+            min-width: 75px;
+            text-align: center;
+            font-weight: 600;
         }
         
         .status-closed {
-            background: linear-gradient(135deg, #475569 0%, #64748b 100%);
-            color: white !important;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 0.8rem;
-            display: inline-block;
-        }
-        
-        .status-in-progress {
-            background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
-            color: white !important;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 0.8rem;
-            display: inline-block;
-        }
-        
-        .ticket-counter {
-            background: var(--gradient-accent);
+            background: linear-gradient(135deg, #475569, #6b7280);
             color: white;
-            padding: 8px 16px;
-            border-radius: 12px;
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            display: inline-block;
+            min-width: 75px;
+            text-align: center;
             font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-left: 10px;
         }
         
-        /* OVERRIDE COMPLETO DE DATATABLES BOOTSTRAP 5 */
-        .dataTables_wrapper .dataTables_length,
-        .dataTables_wrapper .dataTables_filter,
-        .dataTables_wrapper .dataTables_info,
-        .dataTables_wrapper .dataTables_paginate .paginate_button {
-            color: white !important;
+        .status-progress {
+            background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            display: inline-block;
+            min-width: 75px;
+            text-align: center;
+            font-weight: 600;
         }
         
-        .dataTables_wrapper .dataTables_filter input,
-        .dataTables_wrapper .dataTables_length select {
-            background: rgba(255, 255, 255, 0.07) !important;
-            border: 2px solid rgba(255, 255, 255, 0.12) !important;
-            color: white !important;
+        .status-atendido {
+            background: var(--gradient-blue-soft);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            display: inline-block;
+            min-width: 75px;
+            text-align: center;
+            font-weight: 600;
         }
         
-        /* ELIMINAR ESTILOS DE DATATABLES POR COMPLETO */
-        table.dataTable thead .sorting,
-        table.dataTable thead .sorting_asc,
-        table.dataTable thead .sorting_desc,
-        table.dataTable thead .sorting_asc_disabled,
-        table.dataTable thead .sorting_desc_disabled {
-            background-image: none !important;
-            background-color: white !important;
-            color: #1e3a8a !important;
+        .ticket-id {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--accent-blue);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
         }
         
-        /* Estilos para botones de imagen */
+        /* IMAGEN */
         .image-buttons {
             display: flex;
-            flex-wrap: nowrap;
             gap: 4px;
-            margin-bottom: 4px;
         }
         
-        .image-buttons .btn {
-            padding: 4px 8px;
-            font-size: 0.75rem;
-            white-space: nowrap;
+        .btn-image {
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            border: none;
+            color: white;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(0,0,0,0.3);
+            transition: var(--transition);
         }
+        
+        .btn-image:hover {
+            background: rgba(0,0,0,0.5);
+            transform: translateY(-1px);
+        }
+        
+        .btn-view { background: var(--gradient-blue); }
+        .btn-download { background: var(--gradient-blue-soft); }
         
         .image-info {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.7);
-            word-break: break-word;
-            max-width: 150px;
+            font-size: 0.65rem;
+            color: rgba(255,255,255,0.6);
+            margin-top: 2px;
         }
         
-        .btn-image-view {
-            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-            color: white;
-            border: none;
+        /* DATATABLES */
+        .dataTables_wrapper {
+            padding: 0;
         }
         
-        .btn-image-download {
-            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-            color: white;
-            border: none;
+        .dataTables_length,
+        .dataTables_filter {
+            margin-bottom: 15px !important;
         }
         
-        .image-preview-modal .modal-content {
-            background: rgba(15, 23, 42, 0.95);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(59, 130, 246, 0.3);
+        .dataTables_length label,
+        .dataTables_filter label {
+            color: white !important;
+            font-size: 0.85rem !important;
+        }
+        
+        .dataTables_length select,
+        .dataTables_filter input {
+            background: rgba(0,0,0,0.3) !important;
+            border: 2px solid rgba(255,255,255,0.1) !important;
+            color: white !important;
+            border-radius: 8px !important;
+            padding: 5px 10px !important;
+            font-size: 0.85rem !important;
+            margin-left: 5px;
+        }
+        
+        .dataTables_filter input {
+            width: 200px !important;
+        }
+        
+        .dataTables_paginate {
+            margin-top: 15px !important;
+            text-align: center;
+        }
+        
+        .dataTables_paginate .paginate_button {
+            padding: 6px 14px !important;
+            margin: 0 3px !important;
+            border-radius: 8px !important;
+            background: rgba(255,255,255,0.05) !important;
+            color: white !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            font-size: 0.8rem !important;
+            transition: var(--transition) !important;
+            cursor: pointer;
+            display: inline-block;
+        }
+        
+        .dataTables_paginate .paginate_button:hover {
+            background: rgba(59,130,246,0.2) !important;
+            border-color: var(--accent-blue) !important;
+            transform: translateY(-2px);
+        }
+        
+        .dataTables_paginate .paginate_button.current {
+            background: var(--gradient-blue) !important;
+            border: none !important;
+        }
+        
+        .dataTables_info {
+            color: rgba(255,255,255,0.6) !important;
+            font-size: 0.85rem !important;
+            margin-top: 10px !important;
+        }
+        
+        /* MODAL */
+        .modal-content {
+            background: var(--navy-secondary);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
             color: white;
+        }
+        
+        .modal-header {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .btn-close-white {
+            filter: invert(1);
+        }
+        
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 1200px) {
+            .user-detail { font-size: 0.95rem; }
+        }
+        
+        @media (max-width: 992px) {
+            .header-compact { flex-direction: column; align-items: flex-start; }
+            .header-badges { width: 100%; }
+            .badge-light, .badge-counter { flex: 1; justify-content: center; }
+            
+            .user-details { gap: 20px; }
         }
         
         @media (max-width: 768px) {
-            .container {
-                padding: 0 15px;
+            body { padding: 10px; }
+            
+            .header-left { width: 100%; }
+            .title-mini h1 { font-size: 1.3rem; }
+            
+            .user-info-compact { padding: 15px; }
+            .user-details { 
+                flex-direction: column; 
+                align-items: flex-start;
+                gap: 12px;
+                width: 100%;
             }
             
-            .system-title {
-                font-size: 1.8rem;
+            .user-detail { 
+                width: 100%;
+                padding: 6px 0;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
             }
             
-            .system-subtitle {
-                font-size: 0.9rem;
-            }
+            .user-detail:last-child { border-bottom: none; }
             
-            .logo-glow {
-                width: 80px;
-                height: 80px;
-                font-size: 28px;
-            }
-            
-            table.dataTable thead th, table.dataTable tbody td {
+            #ticketsTable td:nth-child(12) {
+                min-width: 80px;
                 white-space: normal;
                 word-break: break-word;
             }
             
-            .image-buttons {
-                flex-direction: column;
+            #ticketsTable td:nth-child(1) {
+                min-width: 120px;
+                white-space: normal;
+                word-break: break-word;
+            }
+            
+            .search-compact { 
+                flex-direction: column; 
+                align-items: flex-start;
+            }
+            .search-label { margin-bottom: 5px; }
+            
+            .pattern-tag { 
+                margin: 2px;
+                font-size: 0.75rem;
+            }
+            
+            .filters-compact { padding: 15px; }
+            .filters-compact .row { flex-direction: column; }
+            .filters-compact [class*="col-"] { width: 100%; margin-bottom: 10px; }
+            
+            .table-wrapper { padding: 15px; overflow-x: auto; }
+            #ticketsTable { min-width: 1000px; }
+            
+            .table-header { flex-direction: column; align-items: flex-start; }
+            .table-stats { width: 100%; justify-content: space-between; }
+            
+            .dataTables_length,
+            .dataTables_filter {
+                text-align: left !important;
+                width: 100% !important;
+            }
+            
+            .dataTables_length select {
+                width: 80px !important;
+                margin-left: 5px;
+            }
+            
+            .dataTables_filter input {
+                width: 100% !important;
+                margin-top: 5px !important;
+                margin-left: 0 !important;
+            }
+            
+            .dataTables_paginate {
+                white-space: nowrap;
+                overflow-x: auto;
+                padding-bottom: 5px;
+            }
+            
+            .dataTables_paginate .paginate_button {
+                padding: 4px 10px !important;
+                margin: 0 2px !important;
+            }
+            
+            .image-buttons { 
+                flex-direction: row;
+                justify-content: center;
+            }
+            .btn-image { 
+                padding: 4px 10px;
+                font-size: 0.7rem;
             }
         }
+        
+        @media (max-width: 576px) {
+            .badge-light, .badge-counter { 
+                width: 100%; 
+                justify-content: center;
+            }
+            
+            .user-detail {
+                font-size: 0.9rem;
+            }
+            
+            .pattern-tag { 
+                width: 100%; 
+                text-align: center;
+                justify-content: center;
+            }
+            
+            .modal-dialog { margin: 10px; }
+            
+            .dataTables_paginate .paginate_button {
+                padding: 3px 8px !important;
+                font-size: 0.7rem !important;
+            }
+        }
+        
+        /* Utilidades */
+        .text-accent { color: var(--accent-blue); }
     </style>
 </head>
 
 <body>
-    
-    <!-- Header Section -->
-    <div class="header-section">
-        <div class="logo-glow">
-            <i class="fas fa-filter"></i>
-        </div>
-        
-        <h1 class="system-title">FILTRAR TICKETS</h1>
-        <p class="system-subtitle">Sistema de Búsqueda y Filtrado Avanzado de Tickets</p>
-        
-        <div class="security-badge">
-            <i class="fas fa-user-tag"></i>
-            <strong>Filtro activo:</strong> Mostrando solo tickets que contienen "<strong><?php echo htmlspecialchars($apellidos_usuario); ?></strong>" juntos
-            <?php if ($total_tickets > 0): ?>
-                <span class="ticket-counter">
-                    <i class="fas fa-ticket-alt"></i> <?php echo $total_tickets; ?> tickets
-                </span>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <!-- Contenedor principal -->
     <div class="container">
-        <!-- Información del Usuario Autenticado -->
-        <div class="glass-card" style="padding: 20px;">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <div class="security-badge" style="margin: 0; width: fit-content;">
-                        <i class="fas fa-user-check"></i>
-                        <strong>Usuario:</strong> <?php echo htmlspecialchars($nombre_usuario); ?> | 
-                        <strong>Área:</strong> <?php echo htmlspecialchars($area_usuario); ?> | 
-                        <strong>ID:</strong> <?php echo htmlspecialchars($id_empleado); ?>
-                    </div>
+        <!-- HEADER SUPER COMPACTO -->
+        <div class="header-compact">
+            <div class="header-left">
+                <div class="logo-mini">
+                    <i class="fas fa-ticket-alt"></i>
                 </div>
-                <div class="col-md-4 text-end">
-                    <a href="javascript:history.back()" class="btn btn-outline-light">
-                        <i class="fas fa-arrow-left"></i> Volver
-                    </a>
+                <div class="title-mini">
+                    <h1>MIS TICKETS</h1>
+                    <p>Seguimiento de solicitudes</p>
+                </div>
+            </div>
+            <div class="header-badges">
+                <span class="badge-light"><i class="fas fa-shield-alt"></i> Panel</span>
+                <span class="badge-light"><i class="fas fa-clock"></i> <?php echo date('d/m/Y H:i'); ?></span>
+                <?php if ($total_tickets > 0): ?>
+                <span class="badge-counter"><i class="fas fa-ticket-alt"></i> <?php echo $total_tickets; ?></span>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- USER INFO -->
+        <div class="user-info-compact">
+            <div class="user-details">
+                <div class="user-avatar"><?php echo substr($nombre_usuario, 0, 2); ?></div>
+                <div class="user-detail">
+                    <i class="fas fa-user-check"></i>
+                    <span class="label">Usuario:</span>
+                    <span class="value"><?php echo htmlspecialchars($nombre_usuario); ?></span>
+                </div>
+                <div class="user-detail">
+                    <i class="fas fa-building"></i>
+                    <span class="label">Área:</span>
+                    <span class="value"><?php echo htmlspecialchars($area_usuario); ?></span>
+                </div>
+                <div class="user-detail">
+                    <i class="fas fa-id-badge"></i>
+                    <span class="label">ID:</span>
+                    <span class="value"><?php echo htmlspecialchars($id_empleado); ?></span>
                 </div>
             </div>
         </div>
 
-        <!-- Formulario de Filtro -->
-        <div class="glass-card" style="padding: 30px;">
-            <div class="row mb-4">
-                <div class="col-12">
-                    <h3 class="section-title" style="font-family: var(--font-heading); font-weight: 700; font-size: 1.2rem; margin-bottom: 20px; color: var(--accent-blue); display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-filter"></i>
-                        Filtros de Búsqueda Adicionales
-                    </h3>
-                </div>
+        <!-- SEARCH INFO -->
+        <div class="search-compact">
+            <div class="search-label"><i class="fas fa-search"></i> Búsqueda activa:</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                <?php foreach ($comodines_busqueda as $index => $patron): ?>
+                <span class="pattern-tag <?php echo $index == 0 ? 'pattern-main' : ''; ?>">
+                    <i class="fas fa-<?php echo $index == 0 ? 'users' : 'user'; ?>"></i> <?php echo htmlspecialchars($patron); ?>
+                </span>
+                <?php endforeach; ?>
+                <span class="pattern-tag"><i class="fas fa-check-circle" style="color:var(--accent-blue);"></i> Apellidos: <?php echo htmlspecialchars($apellidos_usuario); ?></span>
             </div>
-            
-            <form id="filtroForm" class="row g-4">
+        </div>
+
+        <!-- FILTROS COMPACTOS -->
+        <div class="filters-compact">
+            <div class="filters-title"><i class="fas fa-sliders-h"></i> Filtros adicionales</div>
+            <form id="filtroForm" class="row g-2">
                 <div class="col-md-4">
-                    <label for="nombre" class="form-label">
-                        <i class="fas fa-search"></i>
-                        Búsqueda específica
-                    </label>
-                    <input type="text" id="nombre" name="nombre" class="form-control" placeholder="Buscar dentro de sus tickets..." 
-                           value="<?php echo isset($_GET['nombre']) ? htmlspecialchars($_GET['nombre']) : ''; ?>" />
+                    <label class="form-label"><i class="fas fa-search"></i> BUSCAR</label>
+                    <input type="text" id="nombre" name="nombre" class="form-control" placeholder="Asunto, mensaje..." value="<?php echo isset($_GET['nombre']) ? htmlspecialchars($_GET['nombre']) : ''; ?>">
                 </div>
                 <div class="col-md-3">
-                    <label for="fecha_inicial" class="form-label">
-                        <i class="fas fa-calendar-day"></i>
-                        Fecha Inicial
-                    </label>
-                    <input type="date" id="fecha_inicial" name="fecha_inicial" class="form-control" 
-                           value="<?php echo isset($_GET['fecha_inicial']) ? htmlspecialchars($_GET['fecha_inicial']) : ''; ?>" />
+                    <label class="form-label"><i class="fas fa-calendar-day"></i> DESDE</label>
+                    <input type="date" id="fecha_inicial" name="fecha_inicial" class="form-control" value="<?php echo isset($_GET['fecha_inicial']) ? htmlspecialchars($_GET['fecha_inicial']) : ''; ?>">
                 </div>
                 <div class="col-md-3">
-                    <label for="fecha_final" class="form-label">
-                        <i class="fas fa-calendar-day"></i>
-                        Fecha Final
-                    </label>
-                    <input type="date" id="fecha_final" name="fecha_final" class="form-control" 
-                           value="<?php echo isset($_GET['fecha_final']) ? htmlspecialchars($_GET['fecha_final']) : ''; ?>" />
+                    <label class="form-label"><i class="fas fa-calendar-day"></i> HASTA</label>
+                    <input type="date" id="fecha_final" name="fecha_final" class="form-control" value="<?php echo isset($_GET['fecha_final']) ? htmlspecialchars($_GET['fecha_final']) : ''; ?>">
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-search me-2"></i>Filtrar
-                    </button>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn-filter"><i class="fas fa-filter"></i> Filtrar</button>
                 </div>
             </form>
         </div>
 
-        <!-- Tabla de Resultados -->
-        <div class="glass-card" style="padding: 30px;">
+        <!-- TABLA PREMIUM -->
+        <div class="table-wrapper">
+            <div class="table-header">
+                <div class="table-title"><i class="fas fa-crown"></i> Mis Tickets</div>
+                <div class="table-stats">
+                    <span class="stat-badge"><i class="fas fa-database"></i> <?php echo $total_tickets; ?> registros</span>
+                    <span class="stat-badge"><i class="fas fa-sync-alt"></i> Tiempo real</span>
+                </div>
+            </div>
+
             <?php if ($total_tickets > 0): ?>
-            <div class="table-responsive">
-                <table id="ticketsTable" class="table table-striped table-bordered" style="width:100%">
+            <div style="overflow-x: auto;">
+                <table id="ticketsTable" class="table" style="width:100%">
                     <thead>
                         <tr>
-                            <th>Nombre</th>
-                            <th>Correo</th>
-                            <th>Prioridad</th>
-                            <th>Departamento</th>
-                            <th>Asunto</th>
-                            <th>Mensaje</th>
-                            <th>Adjunto</th>
-                            <th>Fecha</th>
-                            <th>Hora</th>
-                            <th>No Ticket</th>
-                            <th>Estatus</th>
-                            <th>Responsable</th>
-                            <!-- NUEVA COLUMNA -->
-                            <th>Imagen Adjunta</th>
+                            <th>NOMBRE</th>
+                            <th>CORREO</th>
+                            <th>PRIORIDAD</th>
+                            <th>DEPTO</th>
+                            <th>ASUNTO</th>
+                            <th>MENSAJE</th>
+                            <th>ADJUNTO</th>
+                            <th>FECHA</th>
+                            <th>HORA</th>
+                            <th>No.</th>
+                            <th>ESTATUS</th>
+                            <th>RESPONSABLE</th>
+                            <th>IMAGEN</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -732,58 +1013,49 @@ function formatFileSize($bytes) {
                         <tr>
                             <td><?php echo htmlspecialchars($array1[$i]); ?></td>
                             <td><?php echo htmlspecialchars($array2[$i]); ?></td>
-                            <td><?php echo htmlspecialchars($array3[$i]); ?></td>
-                            <td><?php echo htmlspecialchars($array4[$i]); ?></td>
-                            <td><?php echo htmlspecialchars($array5[$i]); ?></td>
-                            <td><?php echo htmlspecialchars($array6[$i]); ?></td>
-                            <td><?php echo htmlspecialchars($array7[$i]); ?></td>
-                            <td><?php echo htmlspecialchars($array8[$i]); ?></td>
-                            <td><?php echo htmlspecialchars($array9[$i]); ?></td>
-                            <td><?php echo htmlspecialchars($array10[$i]); ?></td>
-                            <td><?php echo htmlspecialchars($array11[$i]); ?></td>
-                            <td><?php echo htmlspecialchars($array12[$i]); ?></td>
-                            
-                            <!-- NUEVA CELDA PARA IMAGEN -->
                             <td>
                                 <?php 
-                                $imagen_url = $array13[$i];
-                                $imagen_nombre = $array14[$i];
-                                $imagen_tipo = $array15[$i];
-                                $imagen_size = $array16[$i];
-                                
-                                // Verificar si hay imagen
-                                if (!empty($imagen_url) && $imagen_url !== 'NULL' && $imagen_url !== null && !empty($imagen_nombre)): 
-                                    // La URL ya está formateada correctamente como: http://desarollo-bacros/uploads/ticket_1768416635_6967e57bbfcb2.jpg
+                                $p = strtolower($array3[$i] ?? '');
+                                $clase = 'priority-medium';
+                                if (strpos($p, 'alt') !== false || strpos($p, 'urg') !== false) $clase = 'priority-high';
+                                elseif (strpos($p, 'baj') !== false) $clase = 'priority-low';
                                 ?>
-                                    <div class="image-buttons">
-                                        <!-- Botón para ver la imagen en modal -->
-                                        <button type="button" 
-                                                class="btn btn-sm btn-image-view view-image-btn"
-                                                data-image-url="<?php echo htmlspecialchars($imagen_url); ?>"
-                                                data-image-name="<?php echo htmlspecialchars($imagen_nombre); ?>"
-                                                title="Ver imagen">
-                                            <i class="fas fa-eye"></i> Ver
-                                        </button>
-                                        
-                                        <!-- Botón para descargar la imagen -->
-                                        <a href="<?php echo htmlspecialchars($imagen_url); ?>" 
-                                           download="<?php echo htmlspecialchars($imagen_nombre); ?>" 
-                                           class="btn btn-sm btn-image-download"
-                                           title="Descargar imagen">
-                                            <i class="fas fa-download"></i>
-                                        </a>
-                                    </div>
-                                    
-                                    <div class="image-info">
-                                        <div><strong><?php echo htmlspecialchars(substr($imagen_nombre, 0, 25)); ?><?php echo strlen($imagen_nombre) > 25 ? '...' : ''; ?></strong></div>
-                                        <div><?php echo formatFileSize($imagen_size); ?></div>
-                                        <div style="color: #64ffda; font-size: 0.7rem;">
-                                            <?php echo strtoupper(pathinfo($imagen_nombre, PATHINFO_EXTENSION)); ?> | 
-                                            Ticket: <?php echo htmlspecialchars($array10[$i]); ?>
-                                        </div>
-                                    </div>
+                                <span class="<?php echo $clase; ?>"><?php echo htmlspecialchars($array3[$i]); ?></span>
+                            </td>
+                            <td><?php echo htmlspecialchars($array4[$i]); ?></td>
+                            <td><?php echo htmlspecialchars($array5[$i]); ?></td>
+                            <td><?php echo htmlspecialchars(substr($array6[$i] ?? '', 0, 30)) . (strlen($array6[$i] ?? '') > 30 ? '…' : ''); ?></td>
+                            <td><?php echo $array7[$i] ? '<i class="fas fa-paperclip" style="color:var(--accent-blue);"></i>' : '-'; ?></td>
+                            <td><?php echo htmlspecialchars($array8[$i]); ?></td>
+                            <td><?php echo htmlspecialchars(substr($array9[$i], 0, 5)); ?></td>
+                            <td><span class="ticket-id">#<?php echo htmlspecialchars($array10[$i]); ?></span></td>
+                            <td>
+                                <?php 
+                                $e = strtolower($array11[$i] ?? '');
+                                $clase2 = 'status-open';
+                                if (strpos($e, 'cerrado') !== false) $clase2 = 'status-closed';
+                                elseif (strpos($e, 'proceso') !== false) $clase2 = 'status-progress';
+                                elseif (strpos($e, 'atendido') !== false) $clase2 = 'status-atendido';
+                                ?>
+                                <span class="<?php echo $clase2; ?>"><?php echo htmlspecialchars($array11[$i]); ?></span>
+                            </td>
+                            <td><?php echo htmlspecialchars($array12[$i]) ?: '-'; ?></td>
+                            <td>
+                                <?php if (!empty($array13[$i]) && $array13[$i] !== 'NULL'): ?>
+                                <div class="image-buttons">
+                                    <button class="btn-image btn-view view-image-btn" 
+                                            data-url="<?php echo htmlspecialchars($array13[$i]); ?>"
+                                            data-name="<?php echo htmlspecialchars($array14[$i]); ?>"
+                                            data-id="<?php echo htmlspecialchars($array10[$i]); ?>">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <a href="<?php echo htmlspecialchars($array13[$i]); ?>" download="<?php echo htmlspecialchars($array14[$i]); ?>" class="btn-image btn-download">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                </div>
+                                <div class="image-info"><?php echo formatFileSize($array16[$i]); ?></div>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary">Sin imagen</span>
+                                <span style="color:rgba(255,255,255,0.3); font-size:0.7rem;">-</span>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -792,43 +1064,29 @@ function formatFileSize($bytes) {
                 </table>
             </div>
             <?php else: ?>
-            <div class="text-center py-5">
-                <div style="font-size: 80px; margin-bottom: 20px; color: rgba(255, 255, 255, 0.1);">
-                    <i class="fas fa-inbox"></i>
+            <div style="text-align: center; padding: 40px;">
+                <i class="fas fa-inbox" style="font-size: 3rem; color:rgba(255,255,255,0.1);"></i>
+                <h4 style="margin: 10px 0; color:rgba(255,255,255,0.7);">No se encontraron tickets</h4>
+                <div style="margin-top: 15px;">
+                    <?php foreach ($comodines_busqueda as $p): ?>
+                    <span class="pattern-tag"><?php echo htmlspecialchars($p); ?></span>
+                    <?php endforeach; ?>
                 </div>
-                <h3 style="color: rgba(255, 255, 255, 0.7); margin-bottom: 15px;">No se encontraron tickets</h3>
-                <p style="color: rgba(255, 255, 255, 0.5); max-width: 500px; margin: 0 auto;">
-                    No hay tickets registrados que contengan los apellidos "<strong><?php echo htmlspecialchars($apellidos_usuario); ?></strong>" JUNTOS.
-                </p>
-                <a href="javascript:history.back()" class="btn btn-primary mt-4">
-                    <i class="fas fa-arrow-left me-2"></i> Volver al sistema
-                </a>
             </div>
             <?php endif; ?>
         </div>
     </div>
 
-    <!-- Modal para vista previa de imagen -->
-    <div class="modal fade image-preview-modal" id="imagePreviewModal" tabindex="-1" aria-hidden="true">
+    <!-- MODAL -->
+    <div class="modal fade" id="imageModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="imageModalTitle">Vista Previa de Imagen</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h5 class="modal-title"><i class="fas fa-image me-2" style="color:var(--accent-blue);"></i> Vista previa</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body text-center">
-                    <img id="modalImagePreview" src="" alt="Vista previa" class="img-fluid rounded" style="max-height: 70vh;">
-                    <div class="mt-3" id="imageInfo">
-                        <!-- La información de la imagen se carga aquí dinámicamente -->
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <a href="#" id="modalDownloadLink" class="btn btn-success">
-                        <i class="fas fa-download me-2"></i>Descargar
-                    </a>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-2"></i>Cerrar
-                    </button>
+                    <img id="modalImage" src="" class="img-fluid" style="max-height:70vh;">
                 </div>
             </div>
         </div>
@@ -839,258 +1097,63 @@ function formatFileSize($bytes) {
     <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.datatables.net/plug-ins/1.13.4/sorting/datetime-moment.js"></script>
 
     <script>
         $(document).ready(function() {
-            // Solo inicializar DataTable si hay datos
             <?php if ($total_tickets > 0): ?>
-            
-            // Registrar el plugin para ordenar fechas con Moment.js
             $.fn.dataTable.moment('DD/MM/YYYY');
-
-            // Inicializar la tabla de DataTable
-            var table = $('#ticketsTable').DataTable({
-                scrollY: 750,
+            
+            $('#ticketsTable').DataTable({
+                scrollY: 500,
                 scrollX: true,
-                scrollCollapse: true,
-                lengthMenu: [
-                    [100, -1],
-                    [100, 'Todos']
-                ],
+                paging: true,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Todos']],
+                pageLength: 25,
                 language: {
                     lengthMenu: "Mostrar _MENU_ registros",
-                    zeroRecords: "No se encontraron registros",
-                    info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
-                    infoEmpty: "Mostrando 0 a 0 de 0 registros",
-                    infoFiltered: "(filtrado de _MAX_ registros totales)",
+                    info: "Mostrando _START_ a _END_ de _TOTAL_ tickets",
+                    infoEmpty: "Mostrando 0 a 0 de 0 tickets",
+                    infoFiltered: "(filtrado de _MAX_ tickets totales)",
                     search: "Buscar:",
-                    paginate: {
-                        first: "Primero",
-                        last: "Último",
-                        next: "Siguiente",
-                        previous: "Anterior"
-                    },
-                    loadingRecords: "Cargando...",
-                    processing: "Procesando..."
-                },
-                order: [],
-                columnDefs: [{
-                    orderable: false,
-                    targets: '_all'
-                }],
-                drawCallback: function(settings) {
-                    // Forzar texto blanco en todas las celdas
-                    $('#ticketsTable tbody td').css('color', 'white');
-                    // Forzar encabezados blancos con texto azul
-                    $('#ticketsTable thead th').css({
-                        'color': '#1e3a8a',
-                        'background': 'white',
-                        'background-color': 'white'
-                    });
-                    
-                    // Reasignar eventos a los botones después de cada redibujado de DataTable
-                    $('.view-image-btn').off('click').on('click', function() {
-                        var imageUrl = $(this).data('image-url');
-                        var imageName = $(this).data('image-name');
-                        
-                        // Mostrar la imagen en el modal
-                        $('#modalImagePreview').attr('src', imageUrl);
-                        $('#imageModalTitle').text('Vista Previa: ' + imageName);
-                        
-                        // Configurar enlace de descarga
-                        $('#modalDownloadLink').attr('href', imageUrl);
-                        $('#modalDownloadLink').attr('download', imageName);
-                        
-                        // Mostrar información adicional
-                        var imageInfo = `
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <p><strong>Nombre:</strong> ${imageName}</p>
-                                    <p><strong>URL:</strong> <small>${imageUrl}</small></p>
-                                </div>
-                                <div class="col-md-6 text-end">
-                                    <p><strong>Ticket:</strong> ${$(this).closest('tr').find('td:eq(9)').text()}</p>
-                                    <p><strong>Usuario:</strong> ${$(this).closest('tr').find('td:eq(0)').text()}</p>
-                                </div>
-                            </div>
-                        `;
-                        $('#imageInfo').html(imageInfo);
-                        
-                        // Mostrar el modal
-                        var imageModal = new bootstrap.Modal(document.getElementById('imagePreviewModal'));
-                        imageModal.show();
-                    });
-                },
-                initComplete: function() {
-                    // Aplicar estilos después de inicializar
-                    setTimeout(function() {
-                        $('#ticketsTable thead th').css({
-                            'color': '#1e3a8a',
-                            'background': 'white',
-                            'background-color': 'white'
-                        });
-                    }, 100);
-                },
-                columnDefs: [
-                    {
-                        targets: [2], // Columna Prioridad
-                        render: function(data, type, row) {
-                            if (type === 'display') {
-                                var priority = data.toLowerCase();
-                                var className = 'priority-medium';
-                                
-                                if (priority.includes('alta') || priority.includes('high')) {
-                                    className = 'priority-high';
-                                } else if (priority.includes('baja') || priority.includes('low')) {
-                                    className = 'priority-low';
-                                }
-                                
-                                return '<span class="' + className + '">' + data + '</span>';
-                            }
-                            return data;
-                        }
-                    },
-                    {
-                        targets: [10], // Columna Estatus
-                        render: function(data, type, row) {
-                            if (type === 'display') {
-                                var status = data.toLowerCase();
-                                var className = 'status-open';
-                                
-                                if (status.includes('cerrado') || status.includes('closed')) {
-                                    className = 'status-closed';
-                                } else if (status.includes('proceso') || status.includes('progress')) {
-                                    className = 'status-in-progress';
-                                }
-                                
-                                return '<span class="' + className + '">' + data + '</span>';
-                            }
-                            return data;
-                        }
-                    },
-                    {
-                        targets: [9], // Columna No Ticket
-                        render: function(data, type, row) {
-                            if (type === 'display') {
-                                return '<span class="badge bg-dark">#' + data + '</span>';
-                            }
-                            return data;
-                        }
-                    },
-                    {
-                        targets: [6], // Columna Adjunto
-                        render: function(data, type, row) {
-                            if (type === 'display') {
-                                if (data && data.trim() !== '' && data.trim() !== 'N/A' && data.trim() !== 'NULL') {
-                                    return '<a href="' + data + '" target="_blank" class="btn btn-sm btn-outline-light"><i class="fas fa-paperclip"></i> Ver</a>';
-                                }
-                                return '<span style="color: rgba(255, 255, 255, 0.7);">N/A</span>';
-                            }
-                            return data;
-                        }
-                    },
-                    {
-                        targets: [12], // Columna Imagen Adjunta
-                        width: '200px',
-                        render: function(data, type, row) {
-                            return data;
-                        }
+                    zeroRecords: "No se encontraron registros",
+                    emptyTable: "No hay datos disponibles",
+                    paginate: { 
+                        first: '<i class="fas fa-angle-double-left"></i>', 
+                        last: '<i class="fas fa-angle-double-right"></i>', 
+                        next: '<i class="fas fa-angle-right"></i>', 
+                        previous: '<i class="fas fa-angle-left"></i>' 
                     }
-                ]
-            });
-
-            // Forzar estilos después de inicializar DataTable
-            setTimeout(function() {
-                // Forzar encabezados blancos
-                $('#ticketsTable thead th').css({
-                    'color': '#1e3a8a',
-                    'background': 'white',
-                    'background-color': 'white',
-                    'font-weight': '700',
-                    'border-bottom': '2px solid #3b82f6'
-                });
-                
-                // Forzar texto blanco en celdas
-                $('#ticketsTable tbody td').css('color', 'white');
-                $('#ticketsTable tbody tr').css('background-color', 'transparent');
-            }, 200);
-
-            // Evento para botones de ver imagen
-            $(document).on('click', '.view-image-btn', function() {
-                var imageUrl = $(this).data('image-url');
-                var imageName = $(this).data('image-name');
-                
-                // Mostrar la imagen en el modal
-                $('#modalImagePreview').attr('src', imageUrl);
-                $('#imageModalTitle').text('Vista Previa: ' + imageName);
-                
-                // Configurar enlace de descarga
-                $('#modalDownloadLink').attr('href', imageUrl);
-                $('#modalDownloadLink').attr('download', imageName);
-                
-                // Mostrar información adicional
-                var imageInfo = `
-                    <div class="row">
-                        <div class="col-md-6">
-                            <p><strong>Nombre:</strong> ${imageName}</p>
-                            <p><strong>URL:</strong> <small>${imageUrl}</small></p>
-                        </div>
-                        <div class="col-md-6 text-end">
-                            <p><strong>Ticket:</strong> ${$(this).closest('tr').find('td:eq(9)').text()}</p>
-                            <p><strong>Usuario:</strong> ${$(this).closest('tr').find('td:eq(0)').text()}</p>
-                        </div>
-                    </div>
-                `;
-                $('#imageInfo').html(imageInfo);
-                
-                // Mostrar el modal
-                var imageModal = new bootstrap.Modal(document.getElementById('imagePreviewModal'));
-                imageModal.show();
-            });
-
-            // Filtrar los resultados (recargar la página con nuevos parámetros)
-            $('#filtroForm').on('submit', function (e) {
-                e.preventDefault();
-                
-                var nombre = $('#nombre').val();
-                var fechaInicio = $('#fecha_inicial').val();
-                var fechaFinal = $('#fecha_final').val();
-                
-                // Construir URL con parámetros
-                var url = window.location.pathname;
-                var params = [];
-                
-                if (nombre) params.push('nombre=' + encodeURIComponent(nombre));
-                if (fechaInicio) params.push('fecha_inicial=' + fechaInicio);
-                if (fechaFinal) params.push('fecha_final=' + fechaFinal);
-                
-                if (params.length > 0) {
-                    url += '?' + params.join('&');
+                },
+                drawCallback: function() {
+                    $('.view-image-btn').off('click').on('click', function() {
+                        $('#modalImage').attr('src', $(this).data('url'));
+                        new bootstrap.Modal(document.getElementById('imageModal')).show();
+                    });
                 }
-                
-                // Redirigir a la misma página con los nuevos filtros
-                window.location.href = url;
+            });
+            <?php endif; ?>
+
+            $('.view-image-btn').click(function() {
+                $('#modalImage').attr('src', $(this).data('url'));
+                new bootstrap.Modal(document.getElementById('imageModal')).show();
             });
 
-            // Configurar fechas por defecto (últimos 30 días)
-            var today = new Date();
-            var lastMonth = new Date();
-            lastMonth.setDate(today.getDate() - 30);
-            
-            var todayFormatted = today.toISOString().split('T')[0];
-            var lastMonthFormatted = lastMonth.toISOString().split('T')[0];
-            
-            // Solo establecer si no hay valores
+            $('#filtroForm').submit(function(e) {
+                e.preventDefault();
+                let params = [];
+                if ($('#nombre').val()) params.push('nombre=' + encodeURIComponent($('#nombre').val()));
+                if ($('#fecha_inicial').val()) params.push('fecha_inicial=' + $('#fecha_inicial').val());
+                if ($('#fecha_final').val()) params.push('fecha_final=' + $('#fecha_final').val());
+                window.location.href = window.location.pathname + (params.length ? '?' + params.join('&') : '');
+            });
+
             if (!$('#fecha_inicial').val()) {
-                $('#fecha_inicial').val(lastMonthFormatted);
+                let d = new Date(); d.setDate(d.getDate() - 30);
+                $('#fecha_inicial').val(d.toISOString().split('T')[0]);
             }
             if (!$('#fecha_final').val()) {
-                $('#fecha_final').val(todayFormatted);
+                $('#fecha_final').val(new Date().toISOString().split('T')[0]);
             }
-            
-            <?php endif; ?>
         });
     </script>
 </body>

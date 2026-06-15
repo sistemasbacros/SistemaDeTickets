@@ -33,8 +33,8 @@ $sql = "SELECT
     [imagen_tipo],
     [imagen_size]
 FROM [dbo].[T3] 
-WHERE YEAR(TRY_CONVERT(date, fecha, 103)) = YEAR(GETDATE()) 
-  AND MONTH(TRY_CONVERT(date, fecha, 103)) = MONTH(GETDATE())
+WHERE (YEAR(TRY_CONVERT(date, fecha, 103)) = YEAR(GETDATE()) 
+  AND MONTH(TRY_CONVERT(date, fecha, 103)) = MONTH(GETDATE()) ) or  (YEAR(TRY_CONVERT(date, fecha, 103)) = YEAR(GETDATE())  and estatus in ('Pendiente','En proceso '))
 ORDER BY TRY_CONVERT(date, fecha, 103) DESC";
 
 $stmt = sqlsrv_query($conn, $sql);

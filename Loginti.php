@@ -1238,23 +1238,53 @@ ob_end_flush();
             }
         }, 3000);
         
-        // Manejar el envío del formulario
+        // ===== VERSIÓN CORREGIDA - FUNCIONA CON ENTER Y CLIC =====
         document.getElementById('loginForm').addEventListener('submit', function(e) {
-            const usuario = document.getElementById('usuario').value;
-            const contrasena = document.getElementById('contrasena').value;
+            const usuario = document.getElementById('usuario').value.trim();
+            const contrasena = document.getElementById('contrasena').value.trim();
             const loginButton = document.getElementById('loginButton');
             
-            if (usuario && contrasena) {
-                // Mostrar estado de carga
-                loginButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando credenciales...';
-                loginButton.disabled = true;
-                
-                // Agregar pequeña demora para mostrar la animación
-                setTimeout(function() {
-                    loginButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando sesión segura...';
-                }, 1000);
+            // Validar campos vacíos
+            if (!usuario || !contrasena) {
+                e.preventDefault();
+                mostrarError('Por favor complete todos los campos');
+                return;
             }
+            
+            // Cambiar estado del botón - UNA SOLA VEZ
+            loginButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando credenciales...';
+            loginButton.disabled = true;
+            
+            // IMPORTANTE: No usar setTimeout aquí
+            // El formulario se envía naturalmente después de este evento
         });
+
+        // Función para mostrar errores
+        function mostrarError(texto) {
+            // Eliminar mensajes de error existentes
+            const erroresPrevios = document.querySelectorAll('.error-message');
+            erroresPrevios.forEach(el => el.remove());
+            
+            // Crear nuevo mensaje
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + texto;
+            
+            // Insertar en el lugar correcto
+            const securityNotice = document.querySelector('.security-notice');
+            if (securityNotice) {
+                securityNotice.insertAdjacentElement('afterend', errorDiv);
+            } else {
+                document.querySelector('form').insertBefore(errorDiv, document.querySelector('form').firstChild);
+            }
+            
+            // Auto-ocultar después de 4 segundos
+            setTimeout(() => {
+                if (errorDiv && errorDiv.parentNode) {
+                    errorDiv.remove();
+                }
+            }, 4000);
+        }
 
         // Prevenir que el navegador cachee la página
         window.addEventListener('pageshow', function(event) {
@@ -1293,7 +1323,7 @@ ob_end_flush();
             if (e.key === 'Enter') {
                 const focused = document.activeElement;
                 if (focused && (focused.id === 'usuario' || focused.id === 'contrasena')) {
-                    document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+                    document.getElementById('loginForm').requestSubmit();
                 }
             }
         });
@@ -1319,10 +1349,13 @@ ob_end_flush();
             document.documentElement.style.setProperty('--vh', `${vh}px`);
             
             // Si la pantalla es muy pequeña, ocultar elementos no esenciales
-            if (window.innerHeight < 600) {
-                document.querySelector('.footer-text').style.display = 'none';
-            } else {
-                document.querySelector('.footer-text').style.display = 'flex';
+            const footerText = document.querySelector('.footer-text');
+            if (footerText) {
+                if (window.innerHeight < 600) {
+                    footerText.style.display = 'none';
+                } else {
+                    footerText.style.display = 'flex';
+                }
             }
         }
 
