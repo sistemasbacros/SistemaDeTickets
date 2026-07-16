@@ -6,8 +6,8 @@
  * @description
  * Formulario completo y avanzado para la creación de tickets de soporte TI.
  * Requiere autenticación previa y precarga los datos del usuario desde la sesión.
- * Incluye funcionalidad de subida de imágenes, generación automática de ID de ticket,
- * y notificaciones por email mediante PHPMailer.
+ * Incluye funcionalidad de subida de imágenes y generación automática de ID de ticket.
+ * Las notificaciones por email las envía el backend Rust al crear el ticket.
  *
  * Este es el formulario principal usado por empleados autenticados para
  * reportar incidencias de TI. El archivo es extenso (~3000 líneas) debido a
@@ -28,7 +28,7 @@
  *
  * @dependencies
  * - PHP: session, date_default_timezone_set, file functions
- * - PHPMailer: Notificaciones por email
+ * - Backend Rust: Notificaciones por email (POST /api/TicketBacros/tickets)
  * - JS CDN: Bootstrap 5, SweetAlert2, Font Awesome
  * - Interno: Loginti.php (autenticación)
  *
@@ -174,16 +174,6 @@ $tipo_opciones = [
     ]
 ];
 
-// Mapeo de responsables a correos
-$responsable_emails = [
-    'Alfredo' => 'alfredo.rosales@bacrocorp.com',
-    'Ariel' => 'ariel.sanchez@bacrocorp.com',
-    'Boris' => 'boris.ramirez@bacrocorp.com',
-    'Luis' => 'luis.romero@bacrocorp.com',
-    'Luis Salvador' => 'luis.medina@bacrocorp.com',
-    'Alfredo / Ariel' => 'alfredo.rosales@bacrocorp.com, ariel.sanchez@bacrocorp.com'
-];
-
 // Reglas de reemplazo
 $reemplazos = [
     'Ariel' => 'Boris',
@@ -259,18 +249,6 @@ function determinarResponsableFinal($responsable_principal, $subtipo) {
     return $responsable_principal;
 }
 
-// Función para obtener el correo del responsable
-function obtenerEmailResponsable($responsable) {
-    global $responsable_emails;
-    
-    // Si hay múltiples responsables, tomar el primero
-    if (strpos($responsable, '/') !== false) {
-        $responsables = array_map('trim', explode('/', $responsable));
-        $responsable = $responsables[0];
-    }
-    
-    return isset($responsable_emails[$responsable]) ? $responsable_emails[$responsable] : 'tickets@bacrocorp.com';
-}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -1260,6 +1238,7 @@ function obtenerEmailResponsable($responsable) {
   
   <!-- Contenedor principal -->
   <div class="container">
+    <a href="IniSoport.php" style="display:inline-flex;align-items:center;gap:8px;margin-bottom:16px;padding:9px 16px;background:linear-gradient(135deg,#1e3a8a,#3b82f6);color:#fff;font-weight:600;font-size:.85rem;text-decoration:none;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.25);"><i class="fas fa-arrow-left"></i> Volver al panel</a>
     <div class="glass-card animate-in delay-1" style="padding: 35px 30px;">
       <!-- Información del Usuario Autenticado -->
       <div class="security-notice">
@@ -2051,11 +2030,8 @@ function obtenerEmailResponsable($responsable) {
 
       // Mostrar resultado
       <?php
-      if (isset($emailResults)) {
-        showSuccessAlert($name1, $name2, $name10, $persona_asignada,
-          $emailResults['user'], $emailResults['admin'], $emailResults['responsable'],
-          $imagen_nombre ?? '', $clasificacion ?? '', $subtipo ?? '');
-      }
+      showSuccessAlert($name1, $name2, $name10, $persona_asignada,
+        $imagen_nombre ?? '', $clasificacion ?? '', $subtipo ?? '');
       ?>
       <?php endif; ?>
     };
@@ -2065,18 +2041,6 @@ function obtenerEmailResponsable($responsable) {
 </html>
 
 <?php
-// Incluir los archivos necesarios de PHPMailer
-require 'PHPMailer/src/PHPMailer.php';
-require 'PHPMailer/src/SMTP.php';
-require 'PHPMailer/src/Exception.php';
-
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
-
-// Configuración de correos
-define('ADMIN_EMAIL', 'tickets@bacrocorp.com');
-define('ADMIN_NAME', 'Administrador TI BacroCorp');
-
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
   // Variables para la imagen
   $imagen_url = '';
@@ -2219,692 +2183,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   } else {
     $api_ok = true;
 
-    // Enviar correos de notificación (lógica PHPMailer intacta)
-    $emailResults = sendNotificationEmails(
-      $name1, $name2, $name3, $name4, $name5, $name6, $name7,
-      $name8, $name9, $name10, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo
-    );
-
-    if ($emailResults['user'] && $emailResults['admin'] && $emailResults['responsable']) {
-      showSuccessAlert($name1, $name2, $name10, $persona_asignada, true, true, true, $imagen_nombre, $clasificacion, $subtipo);
-    } elseif ($emailResults['user'] || $emailResults['admin'] || $emailResults['responsable']) {
-      showSuccessAlert($name1, $name2, $name10, $persona_asignada,
-        $emailResults['user'], $emailResults['admin'], $emailResults['responsable'],
-        $imagen_nombre, $clasificacion, $subtipo);
-    } else {
-      showWarningAlert($name10, "No se pudieron enviar los correos de notificación.");
-    }
-  }
-}
-
-// Función para enviar todos los correos de notificación
-function sendNotificationEmails($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo) {
-  $results = [
-    'user' => false,
-    'admin' => false,
-    'responsable' => false
-  ];
-  
-  // Enviar correo al usuario
-  $results['user'] = sendUserConfirmationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo);
-  
-  // Enviar correo al administrador
-  $results['admin'] = sendAdminNotificationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo);
-  
-  // Enviar correo al responsable asignado
-  $results['responsable'] = sendResponsableNotificationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo);
-  
-  return $results;
-}
-
-// Función para enviar correo al usuario
-function sendUserConfirmationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo) {
-  try {
-    $mail = new PHPMailer(true);
-
-    configurarSMTP($mail);
-
-    $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
-    $mail->addAddress($email, $name);
-    
-    $mail->isHTML(true);
-    $mail->Subject = '✅ Ticket #' . $ticketId . ' Creado - Departamento de TI BacroCorp';
-    $mail->Body = createUserEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo);
-    
-    return $mail->send();
-    
-  } catch (Exception $e) {
-    error_log("Error enviando correo al usuario: " . $e->getMessage());
-    return false;
-  }
-}
-
-// Función para enviar correo al administrador
-function sendAdminNotificationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo) {
-  try {
-    $mail = new PHPMailer(true);
-
-    configurarSMTP($mail);
-
-    $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
-    $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
-    
-    $mail->isHTML(true);
-    $mail->Subject = '📋 NUEVO TICKET #' . $ticketId . ' - Asignado a: ' . $persona_asignada;
-    $mail->Body = createAdminEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo);
-    
-    return $mail->send();
-    
-  } catch (Exception $e) {
-    error_log("Error enviando correo al administrador: " . $e->getMessage());
-    return false;
-  }
-}
-
-// Función para enviar correo al responsable asignado
-function sendResponsableNotificationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo) {
-  try {
-    $mail = new PHPMailer(true);
-
-    configurarSMTP($mail);
-
-    $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
-
-    // Obtener el correo del responsable
-    $email_responsable = obtenerEmailResponsable($persona_asignada);
-    $mail->addAddress($email_responsable, $persona_asignada);
-    
-    $mail->isHTML(true);
-    $mail->Subject = '🎯 NUEVO TICKET ASIGNADO #' . $ticketId . ' - ' . $priority . ' - ' . $subtipo;
-    $mail->Body = createResponsableEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo);
-    
-    return $mail->send();
-    
-  } catch (Exception $e) {
-    error_log("Error enviando correo al responsable: " . $e->getMessage());
-    return false;
-  }
-}
-
-// Función para crear plantilla de correo al usuario
-function createUserEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo) {
-  $priorityColor = getPriorityColor($priority);
-  $icono = getIconoForSubtipo($clasificacion, $subtipo);
-  
-  $imagen_info = '';
-  if (!empty($imagen_nombre)) {
-    $imagen_info = '
-    <div class="ticket-detail">
-        <span class="ticket-label">Imagen Adjunta:</span>
-        <span>📎 ' . htmlspecialchars($imagen_nombre) . '</span>
-    </div>';
-  }
-  
-  return '
-  <!DOCTYPE html>
-  <html>
-  <head>
-      <meta charset="UTF-8">
-      <style>
-          body {
-              font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-              color: #333;
-              margin: 0;
-              padding: 0;
-              background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-          }
-          .container {
-              max-width: 600px;
-              margin: 20px auto;
-              background-color: #ffffff;
-              border-radius: 12px;
-              overflow: hidden;
-              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-          }
-          .header {
-              background: linear-gradient(135deg, #003366 0%, #0066cc 100%);
-              color: white;
-              padding: 30px 20px;
-              text-align: center;
-          }
-          .header h1 {
-              margin: 0;
-              font-size: 28px;
-              font-weight: 600;
-          }
-          .content {
-              padding: 30px;
-          }
-          .ticket-info {
-              background-color: #f8f9fa;
-              border-radius: 8px;
-              padding: 20px;
-              margin: 20px 0;
-              border-left: 4px solid #0066cc;
-          }
-          .ticket-detail {
-              margin-bottom: 10px;
-              display: flex;
-          }
-          .ticket-label {
-              font-weight: 600;
-              min-width: 120px;
-          }
-          .priority-badge {
-              padding: 4px 12px;
-              border-radius: 15px;
-              font-size: 12px;
-              font-weight: bold;
-              color: white;
-          }
-          .message {
-              background-color: #e8f4fd;
-              border-radius: 8px;
-              padding: 15px;
-              margin: 20px 0;
-              border-left: 4px solid #3498db;
-          }
-          .footer {
-              background-color: #f1f1f1;
-              padding: 20px;
-              text-align: center;
-              font-size: 14px;
-              color: #666;
-          }
-          .thank-you {
-              font-size: 18px;
-              color: #2c3e50;
-              margin-bottom: 20px;
-              text-align: center;
-          }
-          .ticket-id {
-              background: #003366;
-              color: white;
-              padding: 10px;
-              border-radius: 5px;
-              text-align: center;
-              font-size: 18px;
-              font-weight: bold;
-              margin: 15px 0;
-          }
-          .status-badge {
-              display: inline-block;
-              padding: 6px 12px;
-              border-radius: 15px;
-              font-size: 12px;
-              font-weight: bold;
-              background-color: #ffc107;
-              color: #856404;
-          }
-      </style>
-  </head>
-  <body>
-      <div class="container">
-          <div class="header">
-              <h1>🎯 Departamento de TI - BacroCorp</h1>
-              <p>Sistema Automatizado de Gestión de Tickets</p>
-          </div>
-          <div class="content">
-              <div class="thank-you">
-                  <strong>Estimado/a ' . $name . ',</strong>
-              </div>
-              <p>Hemos recibido correctamente tu solicitud de soporte técnico y hemos creado un ticket con la siguiente información:</p>
-              
-              <div class="ticket-id">Ticket #: ' . $ticketId . '</div>
-              
-              <div class="ticket-info">
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Fecha y Hora:</span>
-                      <span>' . $date . ' a las ' . $time . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Estatus:</span>
-                      <span class="status-badge">En proceso</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Responsable Asignado:</span>
-                      <span><strong>' . $persona_asignada . '</strong></span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Departamento:</span>
-                      <span>' . $department . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Clasificación:</span>
-                      <span>' . $clasificacion . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Asunto:</span>
-                      <span>' . $icono . ' ' . $subject . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Prioridad:</span>
-                      <span class="priority-badge" style="background: ' . $priorityColor . ';">' . $priority . '</span>
-                  </div>
-                  ' . $imagen_info . '
-              </div>
-              
-              <div class="message">
-                  <p><strong>Descripción del problema:</strong></p>
-                  <p>' . $description . '</p>
-                  ' . ($message ? '<p><strong>Detalles adicionales:</strong></p><p>' . $message . '</p>' : '') . '
-              </div>
-              
-              <p>Nuestro equipo de especialistas revisará tu solicitud a la mayor brevedad posible y te mantendremos informado sobre el progreso.</p>
-              
-              <p>Si necesitas agregar información adicional a tu ticket o tienes alguna pregunta, por favor responde a este correo haciendo referencia al número de ticket proporcionado.</p>
-              
-              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #555;">
-                  <p>Atentamente,<br>
-                  <strong>Equipo de Soporte Técnico</strong><br>
-                  Departamento de TI - BacroCorp<br>
-                  <em>"Innovación y eficiencia a tu servicio"</em></p>
-              </div>
-          </div>
-          <div class="footer">
-              <p>Este es un mensaje automático, por favor no responda directamente a este correo.</p>
-              <p>&copy; ' . date('Y') . ' BacroCorp - Todos los derechos reservados</p>
-          </div>
-      </div>
-  </body>
-  </html>';
-}
-
-// Función para crear plantilla de correo al administrador
-function createAdminEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo) {
-  $priorityColor = getPriorityColor($priority);
-  $urgencyIcon = getUrgencyIcon($priority);
-  $icono = getIconoForSubtipo($clasificacion, $subtipo);
-  
-  $imagen_info = '';
-  if (!empty($imagen_nombre)) {
-    $imagen_info = '
-    <div class="ticket-detail">
-        <span class="ticket-label">Imagen Adjunta:</span>
-        <span><strong>📎 ' . htmlspecialchars($imagen_nombre) . '</strong></span>
-    </div>';
-  }
-  
-  return '
-  <!DOCTYPE html>
-  <html>
-  <head>
-      <meta charset="UTF-8">
-      <style>
-          body {
-              font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-              color: #333;
-              margin: 0;
-              padding: 0;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          }
-          .container {
-              max-width: 700px;
-              margin: 20px auto;
-              background-color: #ffffff;
-              border-radius: 12px;
-              overflow: hidden;
-              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-          }
-          .header {
-              background: linear-gradient(135deg, #003366 0%, #0066cc 100%);
-              color: white;
-              padding: 25px 20px;
-              text-align: center;
-          }
-          .header h1 {
-              margin: 0;
-              font-size: 24px;
-              font-weight: 600;
-          }
-          .content {
-              padding: 25px;
-          }
-          .ticket-card {
-              background: #f8f9fa;
-              border-radius: 8px;
-              padding: 20px;
-              margin: 20px 0;
-              border-left: 5px solid ' . $priorityColor . ';
-          }
-          .ticket-detail {
-              margin-bottom: 8px;
-              display: flex;
-          }
-          .ticket-label {
-              font-weight: 600;
-              min-width: 140px;
-              color: #2c3e50;
-          }
-          .priority-badge {
-              background: ' . $priorityColor . ';
-              color: white;
-              padding: 6px 15px;
-              border-radius: 20px;
-              font-size: 14px;
-              font-weight: bold;
-          }
-          .user-info {
-              background: #e8f4fd;
-              border-radius: 8px;
-              padding: 15px;
-              margin: 15px 0;
-          }
-          .problem-description {
-              background: #fff3cd;
-              border-radius: 8px;
-              padding: 15px;
-              margin: 15px 0;
-              border-left: 4px solid #ffc107;
-          }
-          .footer {
-              background-color: #2c3e50;
-              color: white;
-              padding: 20px;
-              text-align: center;
-              font-size: 12px;
-          }
-      </style>
-  </head>
-  <body>
-      <div class="container">
-          <div class="header">
-              <h1>📊 REPORTE DE TICKET - SISTEMA AUTOMATIZADO</h1>
-          </div>
-          <div class="content">
-              <div style="text-align: center; margin-bottom: 20px;">
-                  <span style="background: #003366; color: white; padding: 10px 25px; border-radius: 20px; font-size: 18px; font-weight: bold;">TICKET #: ' . $ticketId . '</span>
-              </div>
-              
-              <div class="ticket-card">
-                  <h3 style="margin-top: 0; color: #2c3e50;">📋 Información del Ticket</h3>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Fecha y Hora:</span>
-                      <span>' . $date . ' - ' . $time . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Prioridad:</span>
-                      <span class="priority-badge">' . $priority . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Estatus:</span>
-                      <span style="background: #ffc107; color: #856404; padding: 4px 10px; border-radius: 12px; font-weight: bold;">En proceso</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Persona Asignada:</span>
-                      <span><strong>' . $persona_asignada . '</strong></span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Clasificación:</span>
-                      <span><strong>' . $clasificacion . '</strong></span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Asunto:</span>
-                      <span><strong>' . $icono . ' ' . $subject . '</strong></span>
-                  </div>
-                  ' . $imagen_info . '
-              </div>
-              
-              <div class="user-info">
-                  <h3 style="margin-top: 0; color: #2c3e50;">👤 Información del Usuario</h3>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Nombre:</span>
-                      <span>' . $name . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Correo:</span>
-                      <span>' . $email . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Departamento:</span>
-                      <span>' . $department . '</span>
-                  </div>
-              </div>
-              
-              <div class="problem-description">
-                  <h3 style="margin-top: 0; color: #856404;">📝 Descripción del Problema/Solicitud</h3>
-                  <p><strong>' . $description . '</strong></p>
-                  ' . ($message ? '<p><strong>Detalles adicionales:</strong></p><p>' . $message . '</p>' : '') . '
-              </div>
-              
-              <div style="text-align: center; color: #666; font-size: 14px; margin-top: 20px;">
-                  <p>Este es un mensaje automático del Sistema de Tickets BacroCorp - Asignación Automática</p>
-              </div>
-          </div>
-          <div class="footer">
-              <p>Departamento de TI - BacroCorp | Sistema Automatizado de Notificaciones</p>
-              <p>&copy; ' . date('Y') . ' BacroCorp - Todos los derechos reservados</p>
-          </div>
-      </div>
-  </body>
-  </html>';
-}
-
-// Función para crear plantilla de correo al responsable
-function createResponsableEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo) {
-  $priorityColor = getPriorityColor($priority);
-  $urgencyIcon = getUrgencyIcon($priority);
-  $icono = getIconoForSubtipo($clasificacion, $subtipo);
-  
-  $imagen_info = '';
-  if (!empty($imagen_nombre)) {
-    $imagen_info = '
-    <div class="ticket-detail">
-        <span class="ticket-label">Imagen Adjunta:</span>
-        <span><strong>📎 ' . htmlspecialchars($imagen_nombre) . '</strong></span>
-    </div>';
-  }
-  
-  return '
-  <!DOCTYPE html>
-  <html>
-  <head>
-      <meta charset="UTF-8">
-      <style>
-          body {
-              font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-              color: #333;
-              margin: 0;
-              padding: 0;
-          }
-          .container {
-              max-width: 700px;
-              margin: 20px auto;
-              background-color: #ffffff;
-              border-radius: 12px;
-              overflow: hidden;
-              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-          }
-          .header {
-              background: linear-gradient(135deg, ' . $priorityColor . ' 0%, ' . adjustBrightness($priorityColor, -20) . ' 100%);
-              color: white;
-              padding: 25px 20px;
-              text-align: center;
-          }
-          .header h1 {
-              margin: 0;
-              font-size: 24px;
-              font-weight: 600;
-          }
-          .content {
-              padding: 25px;
-          }
-          .ticket-card {
-              background: #f8f9fa;
-              border-radius: 8px;
-              padding: 20px;
-              margin: 20px 0;
-              border-left: 5px solid ' . $priorityColor . ';
-          }
-          .ticket-detail {
-              margin-bottom: 8px;
-              display: flex;
-          }
-          .ticket-label {
-              font-weight: 600;
-              min-width: 160px;
-              color: #2c3e50;
-          }
-          .priority-badge {
-              background: ' . $priorityColor . ';
-              color: white;
-              padding: 6px 15px;
-              border-radius: 20px;
-              font-size: 14px;
-              font-weight: bold;
-          }
-          .action-required {
-              background: #fff3cd;
-              border: 2px solid #ffc107;
-              border-radius: 8px;
-              padding: 15px;
-              margin: 20px 0;
-              text-align: center;
-          }
-          .footer {
-              background-color: #2c3e50;
-              color: white;
-              padding: 20px;
-              text-align: center;
-              font-size: 12px;
-          }
-          .btn {
-              display: inline-block;
-              padding: 10px 20px;
-              background: ' . $priorityColor . ';
-              color: white;
-              text-decoration: none;
-              border-radius: 5px;
-              font-weight: bold;
-              margin: 10px 5px;
-          }
-      </style>
-  </head>
-  <body>
-      <div class="container">
-          <div class="header">
-              <h1>' . $urgencyIcon . ' NUEVO TICKET ASIGNADO - REQUIERE TU ATENCIÓN</h1>
-              <p>' . $persona_asignada . ', se te ha asignado un nuevo ticket</p>
-          </div>
-          <div class="content">
-              <div class="action-required">
-                  <h3 style="margin-top: 0; color: #856404;">⚠️ ACCIÓN REQUERIDA</h3>
-                  <p>Por favor, revisa este ticket y actualiza su estatus en el sistema.</p>
-              </div>
-              
-              <div class="ticket-card">
-                  <div style="text-align: center; margin-bottom: 15px;">
-                      <span style="background: #003366; color: white; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: bold;">TICKET #: ' . $ticketId . '</span>
-                  </div>
-                  
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Fecha y Hora:</span>
-                      <span>' . $date . ' - ' . $time . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Prioridad:</span>
-                      <span class="priority-badge">' . $priority . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Estatus Actual:</span>
-                      <span style="background: #ffc107; color: #856404; padding: 4px 10px; border-radius: 12px; font-weight: bold;">En proceso</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Asignado a:</span>
-                      <span><strong style="color: ' . $priorityColor . ';">' . $persona_asignada . ' (TÚ)</strong></span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Clasificación:</span>
-                      <span><strong>' . $clasificacion . '</strong></span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Asunto:</span>
-                      <span><strong>' . $icono . ' ' . $subject . '</strong></span>
-                  </div>
-                  ' . $imagen_info . '
-              </div>
-              
-              <div style="background: #e8f4fd; border-radius: 8px; padding: 15px; margin: 15px 0;">
-                  <h3 style="margin-top: 0; color: #2c3e50;">👤 Información del Solicitante</h3>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Nombre:</span>
-                      <span>' . $name . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Correo:</span>
-                      <span>' . $email . '</span>
-                  </div>
-                  <div class="ticket-detail">
-                      <span class="ticket-label">Departamento:</span>
-                      <span>' . $department . '</span>
-                  </div>
-              </div>
-              
-              <div style="background: #f8f9fa; border-radius: 8px; padding: 15px; margin: 15px 0;">
-                  <h3 style="margin-top: 0; color: #2c3e50;">📋 Descripción del Problema</h3>
-                  <p><strong>' . $description . '</strong></p>
-                  ' . ($message ? '<p><strong>Detalles adicionales:</strong></p><p>' . $message . '</p>' : '') . '
-              </div>
-              
-              <div style="text-align: center; margin: 25px 0;">
-                  <p style="font-weight: bold; color: #2c3e50;">Acciones Recomendadas:</p>
-                  <div>
-                      <a href="#" class="btn">📋 Ver en Sistema</a>
-                      <a href="#" class="btn" style="background: #28a745;">✅ Marcar como Resuelto</a>
-                      <a href="#" class="btn" style="background: #6c757d;">📞 Contactar Usuario</a>
-                  </div>
-              </div>
-          </div>
-          <div class="footer">
-              <p>Departamento de TI - BacroCorp | Sistema de Asignación Automática</p>
-              <p>&copy; ' . date('Y') . ' BacroCorp - Todos los derechos reservados</p>
-          </div>
-      </div>
-  </body>
-  </html>';
-}
-
-function adjustBrightness($hex, $steps) {
-    $steps = max(-255, min(255, $steps));
-    $hex = str_replace('#', '', $hex);
-    
-    if (strlen($hex) == 3) {
-        $hex = str_repeat(substr($hex,0,1), 2).str_repeat(substr($hex,1,1), 2).str_repeat(substr($hex,2,1), 2);
-    }
-    
-    $color_parts = str_split($hex, 2);
-    $return = '#';
-    
-    foreach ($color_parts as $color) {
-        $color   = hexdec($color);
-        $color   = max(0, min(255, $color + $steps));
-        $return .= str_pad(dechex($color), 2, '0', STR_PAD_LEFT);
-    }
-    
-    return $return;
-}
-
-function getPriorityColor($priority) {
-  if (strpos($priority, 'Alto') !== false || strpos($priority, 'URGENTE') !== false) {
-    return '#dc3545';
-  } elseif (strpos($priority, 'Medio') !== false || strpos($priority, 'MEDIA') !== false) {
-    return '#ffc107';
-  } elseif (strpos($priority, 'Bajo') !== false || strpos($priority, 'BAJA') !== false) {
-    return '#28a745';
-  } else {
-    return '#6c757d';
-  }
-}
-
-function getUrgencyIcon($priority) {
-  if (strpos($priority, 'Alto') !== false || strpos($priority, 'URGENTE') !== false) {
-    return '🚨🔥';
-  } elseif (strpos($priority, 'Medio') !== false || strpos($priority, 'MEDIA') !== false) {
-    return '⚠️📋';
-  } elseif (strpos($priority, 'Bajo') !== false || strpos($priority, 'BAJA') !== false) {
-    return 'ℹ️📥';
-  } else {
-    return '📝';
+    // Los correos de notificación (solicitante, admin y responsable) los envía el backend Rust.
+    showSuccessAlert($name1, $name2, $name10, $persona_asignada, $imagen_nombre, $clasificacion, $subtipo);
   }
 }
 
@@ -2918,19 +2198,7 @@ function getIconoForSubtipo($tipo, $subtipo) {
   return '';
 }
 
-function showSuccessAlert($name, $email, $ticketId, $persona_asignada, $userEmailSent, $adminEmailSent, $responsableEmailSent, $imagen_nombre = '', $clasificacion = '', $subtipo = '') {
-  $emailStatus = '';
-  
-  if ($userEmailSent && $adminEmailSent && $responsableEmailSent) {
-    $emailStatus = '<p style="color: #28a745; font-weight: bold;">✓ Correos enviados al usuario, administrador y responsable</p>';
-  } else {
-    $emailStatus = '<p style="color: #ffc107; font-weight: bold;">';
-    if ($userEmailSent) $emailStatus .= '✓ Usuario ';
-    if ($adminEmailSent) $emailStatus .= '✓ Administrador ';
-    if ($responsableEmailSent) $emailStatus .= '✓ Responsable ';
-    $emailStatus .= '</p>';
-  }
-  
+function showSuccessAlert($name, $email, $ticketId, $persona_asignada, $imagen_nombre = '', $clasificacion = '', $subtipo = '') {
   $imagenInfo = '';
   if (!empty($imagen_nombre)) {
     $imagenInfo = '<p style="margin: 5px 0;"><strong>Imagen adjunta:</strong> 📎 ' . htmlspecialchars($imagen_nombre) . '</p>';
@@ -2968,8 +2236,6 @@ function showSuccessAlert($name, $email, $ticketId, $persona_asignada, $userEmai
                   </p>
               </div>
               
-              ' . $emailStatus . '
-              
               <p style="color: #666; font-size: 14px; margin-top: 15px;">El ticket ha sido registrado en el sistema y asignado automáticamente.</p>
           </div>
       `,
@@ -2980,36 +2246,6 @@ function showSuccessAlert($name, $email, $ticketId, $persona_asignada, $userEmai
   }).then((result) => {
     if (result.isConfirmed) {
       // window.location.href = "dashboard.php";
-    }
-  });
-  </script>';
-}
-
-function showWarningAlert($ticketId, $error) {
-  echo '
-  <script>
-  Swal.fire({
-      title: "⚠️ Ticket Creado",
-      html: `
-          <div style="text-align: center; padding: 20px;">
-              <div style="font-size: 60px; color: #ffc107; margin-bottom: 20px;">📝</div>
-              <h2 style="color: #003366; margin-bottom: 15px;">¡Solicitud Registrada!</h2>
-              
-              <p style="margin-bottom: 20px;"><strong>Ticket ID:</strong> 
-                  <span style="background: #003366; color: white; padding: 8px 15px; border-radius: 20px; font-size: 16px; font-weight: bold;">' . $ticketId . '</span>
-              </p>
-              
-              <p style="color: #666; font-size: 14px; margin-bottom: 10px;">El ticket se ha guardado en el sistema correctamente.</p>
-              <p style="color: #dc3545; font-size: 14px; font-weight: bold;">Error: ' . addslashes($error) . '</p>
-          </div>
-      `,
-      icon: "warning",
-      confirmButtonColor: "#003366",
-      confirmButtonText: "Volver al Dashboard",
-      allowOutsideClick: false
-  }).then((result) => {
-    if (result.isConfirmed) {
-      window.location.href = "dashboard.php";
     }
   });
   </script>';

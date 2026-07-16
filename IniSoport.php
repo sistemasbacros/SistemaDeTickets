@@ -616,9 +616,6 @@ $iniciales = strtoupper(substr($nombre, 0, 2));
         .user-details { display:flex; flex-direction:column; }
         .user-name { font-weight:600; font-size:.9rem; }
         .user-role { font-size:.75rem; color:var(--text-secondary); }
-        .module-container { position:fixed; top:70px; left:280px; right:var(--spacing-lg); bottom:var(--spacing-lg); background:var(--card-bg); border-radius:var(--border-radius-xl); box-shadow:var(--card-shadow); border:1px solid var(--glass-border); z-index:50; display:none; overflow:hidden; }
-        .module-container.active { display:block; }
-        .module-iframe { width:100%; height:100%; border:none; border-radius:var(--border-radius-xl); }
         .dashboard-container { padding:var(--spacing-lg) var(--spacing-lg) var(--spacing-lg) 280px; max-width:100%; margin:0 auto; transition:padding .4s ease; min-height:calc(100vh - 70px); }
         .dashboard-container.full-width { padding-left:var(--spacing-lg); }
         .dashboard-title { font-family:'Montserrat',sans-serif; font-size:clamp(1.6rem,3vw,2rem); font-weight:800; margin-bottom:var(--spacing-xs); background:var(--gradient-blue); -webkit-background-clip:text; -webkit-text-fill-color:transparent; line-height:1.2; }
@@ -729,22 +726,18 @@ $iniciales = strtoupper(substr($nombre, 0, 2));
             <div class="sidebar-logo">BACROCORP</div>
             <div class="sidebar-subtitle">Sistema de Soporte</div>
         </div>
-        <?php if ($tienePermisosDashboard): ?>
-            <a href="#" class="nav-link" data-page="dashboard"><i class="fas fa-home"></i>INICIO</a>
-        <?php else: ?>
-            <a href="#" class="nav-link disabled" data-page="dashboard"><i class="fas fa-home"></i>INICIO</a>
-        <?php endif; ?>
-        <a href="#" class="nav-link" data-page="levantar-ticket" data-link="Formtic1.php"><i class="fas fa-ticket-alt"></i>LEVANTAR TICKET</a>
-        <a href="#" class="nav-link" data-page="revisar-tickets" data-link="RevisarT.php"><i class="fas fa-eye"></i>REVISAR TICKETS</a>
+        <a href="IniSoport.php" class="nav-link active"><i class="fas fa-home"></i>INICIO</a>
+        <a href="Formtic1.php" class="nav-link"><i class="fas fa-ticket-alt"></i>LEVANTAR TICKET</a>
+        <a href="RevisarT.php" class="nav-link"><i class="fas fa-eye"></i>REVISAR TICKETS</a>
         <?php if (in_array($usuarioActual, $usuariosPermitidosProcesar)): ?>
-            <a href="#" class="nav-link" data-page="procesar-tickets" data-link="TableT1.php"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a>
+            <a href="TableT1.php" class="nav-link"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a>
         <?php else: ?>
-            <a href="#" class="nav-link disabled" data-page="procesar-tickets" data-link="TableT1.php"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a>
+            <a class="nav-link disabled" aria-disabled="true"><i class="fas fa-cogs"></i>PROCESAR TICKETS</a>
         <?php endif; ?>
         <?php if ($tienePermisosDashboard): ?>
-            <a href="#" class="nav-link active" data-page="reportes"><i class="fas fa-chart-line"></i>REPORTES</a>
+            <a href="IniSoport.php" class="nav-link"><i class="fas fa-chart-line"></i>REPORTES</a>
         <?php else: ?>
-            <a href="#" class="nav-link disabled" data-page="reportes"><i class="fas fa-chart-line"></i>REPORTES</a>
+            <a class="nav-link disabled" aria-disabled="true"><i class="fas fa-chart-line"></i>REPORTES</a>
         <?php endif; ?>
         <div class="theme-toggle">
             <button class="theme-toggle-btn" id="themeToggle"><i class="fas fa-sun"></i> MODO CLARO</button>
@@ -765,17 +758,6 @@ $iniciales = strtoupper(substr($nombre, 0, 2));
             </div>
         </div>
     </div>
-    <div class="custom-alert" id="permissionAlert">
-        <div class="alert-content">
-            <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
-            <h3 class="alert-title">Acceso Restringido</h3>
-            <p class="alert-message" id="permissionMessage">No tienes permisos para acceder a este módulo.</p>
-            <div class="alert-actions">
-                <button class="alert-btn alert-btn-permission" id="closePermissionAlert">Aceptar</button>
-            </div>
-        </div>
-    </div>
-
     <div class="background-container">
         <div class="glass-layer"></div>
         <div class="water-drops-container" id="waterDrops"></div>
@@ -797,10 +779,6 @@ $iniciales = strtoupper(substr($nombre, 0, 2));
             </div>
         </div>
     </header>
-
-    <div class="module-container" id="moduleContainer">
-        <iframe src="" class="module-iframe" id="moduleIframe"></iframe>
-    </div>
 
     <div class="dashboard-container">
         <?php if (!$tienePermisosDashboard): ?>
@@ -1304,13 +1282,11 @@ $iniciales = strtoupper(substr($nombre, 0, 2));
         const sidebarToggle     = document.getElementById('sidebarToggle');
         const dashboardHeader   = document.querySelector('.dashboard-header');
         const dashboardContainer = document.querySelector('.dashboard-container');
-        const moduleContainer   = document.getElementById('moduleContainer');
 
         sidebarToggle.addEventListener('click', function() {
             sidebar.classList.toggle('hidden');
             dashboardHeader.classList.toggle('full-width');
             dashboardContainer.classList.toggle('full-width');
-            moduleContainer.style.left = sidebar.classList.contains('hidden') ? 'var(--spacing-lg)' : '280px';
             this.querySelector('i').className = sidebar.classList.contains('hidden') ? 'fas fa-bars' : 'fas fa-times';
             <?php if ($tienePermisosDashboard): ?> setTimeout(resizeCharts, 300); <?php endif; ?>
         });
@@ -1332,11 +1308,6 @@ $iniciales = strtoupper(substr($nombre, 0, 2));
         });
         logoutAlert.addEventListener('click', e => { if (e.target===logoutAlert) logoutAlert.classList.remove('active'); });
 
-        const permissionAlert   = document.getElementById('permissionAlert');
-        const permissionMessage = document.getElementById('permissionMessage');
-        document.getElementById('closePermissionAlert').addEventListener('click', () => permissionAlert.classList.remove('active'));
-        permissionAlert.addEventListener('click', e => { if (e.target===permissionAlert) permissionAlert.classList.remove('active'); });
-
         <?php if ($tienePermisosDashboard): ?>
         document.querySelectorAll('.chart-action-btn').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -1353,55 +1324,6 @@ $iniciales = strtoupper(substr($nombre, 0, 2));
             setTimeout(initialize3DCharts, 150);
             window.addEventListener('resize', resizeCharts);
             <?php endif; ?>
-
-            const pageConfig = {
-                'dashboard':         { showModule:false, title:'Dashboard de Reportes', mainTitle:'Bienvenido, <?php echo addslashes(htmlspecialchars($nombre)); ?>', subtitle:'Dashboard personalizado del sistema de soporte técnico con métricas 3D', permissionRequired:true, allowedUsers:<?php echo json_encode($usuariosPermitidosDashboard); ?> },
-                'levantar-ticket':   { showModule:true,  url:'Formtic1.php', title:'Levantar Ticket', mainTitle:'Formulario de Tickets', subtitle:'Complete el formulario para crear un nuevo ticket de soporte' },
-                'revisar-tickets':   { showModule:true,  url:'RevisarT.php', title:'Revisar Tickets', mainTitle:'Revisión de Tickets', subtitle:'Revise y gestione los tickets asignados' },
-                'procesar-tickets':  { showModule:true,  url:'TableT1.php', title:'Procesar Tickets', mainTitle:'Procesamiento de Tickets', subtitle:'Procese y actualice el estado de los tickets', permissionRequired:true, allowedUsers:<?php echo json_encode($usuariosPermitidosProcesar); ?> },
-                'reportes':          { showModule:false, title:'Dashboard de Reportes', mainTitle:'Reportes de Tickets', subtitle:'Dashboard con métricas 3D y cumplimiento SLA', permissionRequired:true, allowedUsers:<?php echo json_encode($usuariosPermitidosDashboard); ?> }
-            };
-
-            const dashboardContent = document.getElementById('dashboardContent');
-            const moduleIframe     = document.getElementById('moduleIframe');
-            const currentUser      = '<?php echo addslashes($usuarioActual); ?>';
-
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    if (this.classList.contains('disabled')) {
-                        const cfg = pageConfig[this.getAttribute('data-page')];
-                        permissionMessage.textContent = cfg && cfg.permissionRequired
-                            ? 'El módulo "' + cfg.title + '" está restringido para usuarios autorizados.'
-                            : 'No tienes permisos para acceder a este módulo.';
-                        permissionAlert.classList.add('active'); return;
-                    }
-                    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-                    this.classList.add('active');
-                    const page = this.getAttribute('data-page');
-                    const cfg  = pageConfig[page];
-                    if (!cfg) return;
-                    if (cfg.permissionRequired && !cfg.allowedUsers.includes(currentUser)) {
-                        permissionMessage.textContent = 'No tienes permisos para acceder al módulo "' + cfg.title + '".';
-                        permissionAlert.classList.add('active'); return;
-                    }
-                    if (cfg.showModule && cfg.url) {
-                        moduleContainer.classList.add('active');
-                        if (dashboardContent) dashboardContent.style.display = 'none';
-                        moduleIframe.src = cfg.url;
-                    } else {
-                        moduleContainer.classList.remove('active');
-                        if (dashboardContent) dashboardContent.style.display = 'block';
-                        moduleIframe.src = '';
-                        <?php if ($tienePermisosDashboard): ?> setTimeout(initialize3DCharts, 100); <?php endif; ?>
-                    }
-                    document.querySelector('.logo-subtitle').textContent = cfg.title;
-                    <?php if ($tienePermisosDashboard): ?>
-                    document.querySelector('.dashboard-title').textContent = cfg.mainTitle;
-                    document.querySelector('.dashboard-subtitle').textContent = cfg.subtitle;
-                    <?php endif; ?>
-                });
-            });
 
             document.querySelectorAll('.filter-select').forEach(s => {
                 s.addEventListener('change', function() { this.form.submit(); });

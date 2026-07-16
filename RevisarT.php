@@ -411,6 +411,7 @@ $total_tickets = count($array1);
 
 <body>
     <div class="container">
+        <a href="IniSoport.php" style="display:inline-flex;align-items:center;gap:8px;margin-bottom:12px;padding:9px 16px;background:linear-gradient(135deg,#1e3a8a,#3b82f6);color:#fff;font-weight:600;font-size:.85rem;text-decoration:none;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.25);"><i class="fas fa-arrow-left"></i> Volver al panel</a>
         <!-- HEADER SUPER COMPACTO -->
         <div class="header-compact">
             <div class="header-left">

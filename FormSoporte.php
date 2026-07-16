@@ -16,14 +16,8 @@
  */
 require_once __DIR__ . '/auth_check.php';
 
-// Incluir los archivos necesarios de PHPMailer
-require 'PHPMailer/src/PHPMailer.php';
-require 'PHPMailer/src/SMTP.php';
-require 'PHPMailer/src/Exception.php';
+// config.php carga las variables de entorno (.env) usadas por getenv('PDF_API_URL')
 require_once __DIR__ . '/config.php';
-
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
 
 $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/');
 
@@ -98,12 +92,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_ticket'])) {
             error_log("Error cURL al crear ticket: " . $curlErr);
             showErrorAlert("Error de conexión con el servidor de tickets.");
         } elseif ($httpCode === 200 || $httpCode === 201) {
-            // Enviar correos de confirmación (opcional, no detiene el proceso)
-            sendConfirmationEmails(
-                $name1, $name2, $name3, $name4, $name5,
-                $name6, $name7, $name8, $name9, $name10
-            );
-
+            // Los correos de confirmación (solicitante y admin) los envía el backend Rust
             showSuccessAlert($name1, $name2, $name10);
         } else {
             $decodedResp = json_decode($resp, true);
@@ -111,206 +100,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_ticket'])) {
             error_log("API error al crear ticket: HTTP $httpCode — $resp");
             showErrorAlert("Error al guardar el ticket. Código: $httpCode. $errorMsg");
         }
-    }
-}
-
-function sendConfirmationEmails($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId) {
-    $results = [
-        'user'  => false,
-        'admin' => false
-    ];
-
-    if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $results['user'] = sendUserConfirmationEmail(
-            $name, $email, $priority, $department, $subject,
-            $message, $description, $date, $time, $ticketId
-        );
-    } else {
-        error_log("Correo de usuario inválido: " . $email);
-    }
-
-    $results['admin'] = sendAdminNotificationEmail(
-        $name, $email, $priority, $department, $subject,
-        $message, $description, $date, $time, $ticketId
-    );
-
-    return $results;
-}
-
-function sendUserConfirmationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId) {
-    try {
-        $mail = new PHPMailer(true);
-        configurarSMTP($mail);
-        $mail->Timeout = 10;
-
-        $mail->setFrom('tickets@bacrocorp.com', 'Departamento de TI - BacroCorp');
-        $mail->addAddress($email, $name);
-
-        $mail->isHTML(true);
-        $mail->Subject = 'Confirmación de Ticket #' . $ticketId . ' - Departamento de TI BacroCorp';
-        $mail->Body    = createUserEmailTemplate(
-            $name, $email, $priority, $department, $subject,
-            $message, $description, $date, $time, $ticketId
-        );
-
-        return $mail->send();
-    } catch (Exception $e) {
-        error_log("Error enviando correo al usuario: " . $e->getMessage());
-        return false;
-    }
-}
-
-function sendAdminNotificationEmail($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId) {
-    try {
-        $mail = new PHPMailer(true);
-        configurarSMTP($mail);
-        $mail->Timeout = 10;
-
-        $mail->setFrom('tickets@bacrocorp.com', 'Sistema de Tickets BacroCorp');
-        $mail->addAddress(ADMIN_EMAIL, ADMIN_NAME);
-
-        $mail->isHTML(true);
-        $mail->Subject = 'NUEVO TICKET #' . $ticketId . ' - ' . $priority . ' - ' . $subject;
-        $mail->Body    = createAdminEmailTemplate(
-            $name, $email, $priority, $department, $subject,
-            $message, $description, $date, $time, $ticketId
-        );
-
-        return $mail->send();
-    } catch (Exception $e) {
-        error_log("Error enviando correo al administrador: " . $e->getMessage());
-        return false;
-    }
-}
-
-function createUserEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId) {
-    $priorityColor = getPriorityColor($priority);
-
-    return '
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <style>
-            body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; padding: 0; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
-            .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
-            .header { background: linear-gradient(135deg, #003366 0%, #0066cc 100%); color: white; padding: 30px 20px; text-align: center; }
-            .header h1 { margin: 0; font-size: 28px; font-weight: 600; }
-            .content { padding: 30px; }
-            .ticket-info { background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #0066cc; }
-            .ticket-detail { margin-bottom: 10px; display: flex; }
-            .ticket-label { font-weight: 600; min-width: 120px; }
-            .priority-badge { padding: 4px 12px; border-radius: 15px; font-size: 12px; font-weight: bold; color: white; background: ' . $priorityColor . '; }
-            .message { background-color: #e8f4fd; border-radius: 8px; padding: 15px; margin: 20px 0; border-left: 4px solid #3498db; }
-            .footer { background-color: #f1f1f1; padding: 20px; text-align: center; font-size: 14px; color: #666; }
-            .thank-you { font-size: 18px; color: #2c3e50; margin-bottom: 20px; text-align: center; }
-            .ticket-id { background: #003366; color: white; padding: 10px; border-radius: 5px; text-align: center; font-size: 18px; font-weight: bold; margin: 15px 0; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header"><h1>Departamento de TI - BacroCorp</h1><p>Sistema de Gestión de Tickets</p></div>
-            <div class="content">
-                <div class="thank-you"><strong>Estimado/a ' . htmlspecialchars($name) . ',</strong></div>
-                <p>Hemos recibido correctamente tu solicitud de soporte técnico y hemos creado un ticket con la siguiente información:</p>
-                <div class="ticket-id">Ticket #: ' . htmlspecialchars($ticketId) . '</div>
-                <div class="ticket-info">
-                    <div class="ticket-detail"><span class="ticket-label">Fecha y Hora:</span><span>' . htmlspecialchars($date) . ' a las ' . htmlspecialchars($time) . '</span></div>
-                    <div class="ticket-detail"><span class="ticket-label">Departamento:</span><span>' . htmlspecialchars($department) . '</span></div>
-                    <div class="ticket-detail"><span class="ticket-label">Tipo de Solicitud:</span><span>' . htmlspecialchars($subject) . '</span></div>
-                    <div class="ticket-detail"><span class="ticket-label">Prioridad:</span><span class="priority-badge">' . htmlspecialchars($priority) . '</span></div>
-                </div>
-                <div class="message">
-                    <p><strong>Descripción del problema:</strong></p>
-                    <p>' . htmlspecialchars($description) . '</p>
-                    ' . (!empty($message) ? '<p><strong>Detalles adicionales:</strong></p><p>' . htmlspecialchars($message) . '</p>' : '') . '
-                </div>
-                <p>Nuestro equipo de especialistas revisará tu solicitud a la mayor brevedad posible.</p>
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #555;">
-                    <p>Atentamente,<br><strong>Equipo de Soporte Técnico</strong><br>Departamento de TI - BacroCorp</p>
-                </div>
-            </div>
-            <div class="footer">
-                <p>Este es un mensaje automático, por favor no responda directamente a este correo.</p>
-                <p>&copy; ' . date('Y') . ' BacroCorp - Todos los derechos reservados</p>
-            </div>
-        </div>
-    </body>
-    </html>';
-}
-
-function createAdminEmailTemplate($name, $email, $priority, $department, $subject, $message, $description, $date, $time, $ticketId) {
-    $priorityColor = getPriorityColor($priority);
-    $urgencyIcon   = getUrgencyIcon($priority);
-
-    return '
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <style>
-            body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; padding: 0; }
-            .container { max-width: 700px; margin: 20px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); }
-            .header { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; padding: 25px 20px; text-align: center; }
-            .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
-            .content { padding: 25px; }
-            .alert-banner { background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 15px 0; text-align: center; font-weight: bold; color: #856404; }
-            .ticket-card { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 5px solid ' . $priorityColor . '; }
-            .ticket-detail { margin-bottom: 8px; display: flex; }
-            .ticket-label { font-weight: 600; min-width: 140px; color: #2c3e50; }
-            .priority-badge { background: ' . $priorityColor . '; color: white; padding: 6px 15px; border-radius: 20px; font-size: 14px; font-weight: bold; }
-            .user-info { background: #e8f4fd; border-radius: 8px; padding: 15px; margin: 15px 0; }
-            .problem-description { background: #fff3cd; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #ffc107; }
-            .footer { background-color: #2c3e50; color: white; padding: 20px; text-align: center; font-size: 12px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header"><h1>' . $urgencyIcon . ' NUEVO TICKET DE SOPORTE - REQUIERE ATENCIÓN</h1></div>
-            <div class="content">
-                <div class="alert-banner">Se ha generado un nuevo ticket con prioridad ' . htmlspecialchars($priority) . ' que requiere tu atención inmediata.</div>
-                <div class="ticket-card">
-                    <div style="text-align: center; margin-bottom: 15px;"><span style="background: #003366; color: white; padding: 8px 20px; border-radius: 20px; font-size: 16px; font-weight: bold;">TICKET #: ' . htmlspecialchars($ticketId) . '</span></div>
-                    <div class="ticket-detail"><span class="ticket-label">Fecha y Hora:</span><span>' . htmlspecialchars($date) . ' - ' . htmlspecialchars($time) . '</span></div>
-                    <div class="ticket-detail"><span class="ticket-label">Prioridad:</span><span class="priority-badge">' . htmlspecialchars($priority) . '</span></div>
-                    <div class="ticket-detail"><span class="ticket-label">Tipo de Solicitud:</span><span><strong>' . htmlspecialchars($subject) . '</strong></span></div>
-                </div>
-                <div class="user-info">
-                    <h3 style="margin-top: 0; color: #2c3e50;">Información del Usuario</h3>
-                    <div class="ticket-detail"><span class="ticket-label">Nombre:</span><span>' . htmlspecialchars($name) . '</span></div>
-                    <div class="ticket-detail"><span class="ticket-label">Correo:</span><span>' . htmlspecialchars($email) . '</span></div>
-                    <div class="ticket-detail"><span class="ticket-label">Departamento:</span><span>' . htmlspecialchars($department) . '</span></div>
-                </div>
-                <div class="problem-description">
-                    <h3 style="margin-top: 0; color: #856404;">Descripción del Problema</h3>
-                    <p><strong>' . htmlspecialchars($description) . '</strong></p>
-                    ' . (!empty($message) ? '<p><strong>Detalles adicionales:</strong></p><p>' . htmlspecialchars($message) . '</p>' : '') . '
-                </div>
-            </div>
-            <div class="footer">
-                <p>Departamento de TI - BacroCorp | Sistema Automatizado de Notificaciones</p>
-                <p>&copy; ' . date('Y') . ' BacroCorp - Todos los derechos reservados</p>
-            </div>
-        </div>
-    </body>
-    </html>';
-}
-
-function getPriorityColor($priority) {
-    switch ($priority) {
-        case 'Alto':  return '#dc3545';
-        case 'Medio': return '#ffc107';
-        case 'Bajo':  return '#28a745';
-        default:      return '#6c757d';
-    }
-}
-
-function getUrgencyIcon($priority) {
-    switch ($priority) {
-        case 'Alto':  return '[URGENTE]';
-        case 'Medio': return '[MEDIO]';
-        case 'Bajo':  return '[INFO]';
-        default:      return '[TICKET]';
     }
 }
 

@@ -272,14 +272,14 @@ table.on('click', 'tbody tr', (e) => {
 function theFunction1() {
     var arrayJson = JSON.stringify(prueba);
     $.post("t1.php", { arrayDeValores: arrayJson }, function(data) {
-        window.open('AsigBien1.php?', 'Asigna tu ticket', 'toolbars=0,width=600,height=500,right=200,top=200,scrollbars=1,resizable=5');
+        window.open('AsigBien.php?', 'Asigna tu ticket', 'toolbars=0,width=600,height=500,right=200,top=200,scrollbars=1,resizable=5');
     });
 }
 
 function theFunction2() {
     var arrayJson = JSON.stringify(prueba);
     $.post("t1.php", { arrayDeValores: arrayJson }, function(data) {
-        window.open('AsigBien2.php?', 'Asigna tu ticket', 'toolbars=0,width=600,height=500,right=200,top=200,scrollbars=1,resizable=5');
+        window.open('AsigBien.php?', 'Asigna tu ticket', 'toolbars=0,width=600,height=500,right=200,top=200,scrollbars=1,resizable=5');
     });
 }
 </script>

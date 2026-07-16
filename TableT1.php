@@ -94,6 +94,15 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
     exit();
 }
 
+// GUARD SERVER-SIDE DE PERMISOS
+// Solo usuarios autorizados pueden procesar tickets. Cierra el acceso directo
+// por URL (antes solo lo frenaba el JS del dashboard).
+$usuariosPermitidosProcesar = ['luis.vargas', 'alfredo.rosales', 'luis.romero', 'ariel.antonio'];
+if (!in_array($_SESSION['user_username'] ?? '', $usuariosPermitidosProcesar, true)) {
+    header('Location: IniSoport.php');
+    exit();
+}
+
 // Obtener datos del usuario desde la sesión
 $nombre_usuario = $_SESSION['user_name'] ?? 'Usuario';
 $id_empleado = $_SESSION['user_id'] ?? 'N/A';
@@ -913,6 +922,7 @@ $usuario = $_SESSION['user_username'] ?? 'N/A';
 
 <body>
     <div class="app-wrapper">
+        <a href="IniSoport.php" style="display:inline-flex;align-items:center;gap:8px;margin-bottom:12px;padding:9px 16px;background:linear-gradient(135deg,#1e3a8a,#3b82f6);color:#fff;font-weight:600;font-size:.85rem;text-decoration:none;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.25);"><i class="fas fa-arrow-left"></i> Volver al panel</a>
         <!-- Header Premium -->
         <div class="header-premium">
             <div class="logo-premium">
