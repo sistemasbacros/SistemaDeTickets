@@ -37,7 +37,7 @@ $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/'
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Ticket soporte TI</title>  <a href="M/website-menu-05/index.html" style="color:black;font-size:20px;font-weight: bold;" >INICIO</a>
+    <title>Ticket soporte TI</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
@@ -46,8 +46,12 @@ $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/'
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 
     <style>
+        body {
+            overflow-x: hidden;
+        }
+
         .bcontent {
-            margin-top: 10px;
+            margin-top: 8px;
         }
 
         .is-required:after {
@@ -56,10 +60,87 @@ $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/'
             color: red;
             font-weight: bold;
         }
+
+        /* Encabezado: título + logo */
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 16px;
+        }
+
+        .page-header h2 {
+            margin: 0;
+        }
+
+        .inicio-link {
+            color: black;
+            font-size: 20px;
+            font-weight: bold;
+            display: inline-block;
+            padding: 8px 16px;
+        }
+
+        /* ── Responsivo ──────────────────────────────────────────────── */
+        @media (max-width: 992px) {
+            /* Objetivos táctiles ≥40px, separados ≥8px */
+            .form-control,
+            .form-select,
+            .btn,
+            .inicio-link {
+                min-height: 44px;
+                font-size: 16px; /* evita el zoom automático en iOS */
+            }
+
+            .btn {
+                padding: 12px 24px;
+            }
+
+            .form-outline {
+                margin-bottom: 16px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            body {
+                font-size: 14px;
+            }
+
+            .page-header {
+                padding: 12px 8px;
+            }
+
+            .page-header h2 {
+                font-size: 1.25rem;
+            }
+
+            .container.bcontent {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+
+            /* Las etiquetas usan tamaño legible en móvil (anulan el estilo en línea) */
+            .form-label,
+            label {
+                font-size: 15px !important;
+                margin-bottom: 4px;
+            }
+
+            /* El formulario colapsa a una columna */
+            .btn {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
-<h2>Asignar tickets y tiempos de atención</h2>  <img src="Logo2.png" width="50" height="50" align="right"> </div>
+<div class="page-header">
+  <h2>Asignar tickets y tiempos de atención</h2>
+  <img src="Logo2.png" width="50" height="50" alt="Logo">
+</div>
+<p><a href="M/website-menu-05/index.html" class="inicio-link">INICIO</a></p>
     <div class="container bcontent">
 
     <form id="formAsignar">

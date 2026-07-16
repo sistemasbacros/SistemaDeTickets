@@ -96,6 +96,11 @@ function test_input($data) {
 
   <!-- Estilos personalizados -->
   <style>
+    /* El body nunca scrollea en horizontal: lo hace la tabla */
+    body {
+      overflow-x: hidden;
+    }
+
     /* Tabla moderna */
     .table {
       border-collapse: separate;
@@ -152,8 +157,86 @@ function test_input($data) {
     .header-buttons {
       margin-bottom: 24px;
       display: flex;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
+    }
+
+    /* ── Responsivo ──────────────────────────────────────────────── */
+
+    /* La tabla (y el scroller propio de DataTables) scrollean por dentro */
+    .table-responsive,
+    .dataTables_wrapper .dataTables_scrollBody {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    @media (max-width: 992px) {
+      /* Objetivos táctiles ≥40px, separados ≥8px (gap del contenedor) */
+      .btn-custom {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 0;
+      }
+
+      .header-buttons {
+        margin-bottom: 16px;
+      }
+
+      /* Controles propios de DataTables (buscar / paginar) */
+      .dataTables_wrapper .dataTables_filter input,
+      .dataTables_wrapper .dataTables_length select {
+        min-height: 44px;
+        font-size: 16px; /* evita el zoom automático en iOS */
+      }
+
+      .dataTables_wrapper .paginate_button {
+        min-height: 44px;
+        line-height: 28px;
+      }
+
+      .table th {
+        font-size: 14px;
+        padding: 12px 8px;
+      }
+    }
+
+    @media (max-width: 576px) {
+      body {
+        font-size: 14px;
+      }
+
+      /* Los botones del encabezado colapsan a una columna */
+      .header-buttons {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .btn-custom {
+        width: 100%;
+      }
+
+      .dataTables_wrapper .dataTables_filter,
+      .dataTables_wrapper .dataTables_length {
+        float: none;
+        text-align: left;
+        width: 100%;
+      }
+
+      .dataTables_wrapper .dataTables_filter input {
+        width: 100%;
+        margin-left: 0;
+      }
+
+      /* Tabla densa: 13px permitido en ≤576px */
+      .table th,
+      .table td {
+        font-size: 13px;
+        padding: 8px;
+        white-space: nowrap;
+      }
     }
   </style>
 

@@ -243,11 +243,12 @@ if (!function_exists('require_jefe_area_strict')) {
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Acceso restringido — BACROCORP</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#f4f6fb;color:#1a1a2e;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#f4f6fb;color:#1a1a2e;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;overflow-x:hidden}
 .box{background:#fff;max-width:560px;width:100%;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.08);padding:36px 38px;text-align:center;border-top:6px solid #dc3545}
 .icon-wrap{width:80px;height:80px;background:linear-gradient(135deg,#fde2e4,#fecdd2);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
 .icon-wrap i{color:#b00020;font-size:2.2rem}
@@ -268,6 +269,30 @@ h1{font-size:1.5rem;color:#001550;margin:0 0 8px}
 .btn-secondary:hover{background:#f0f4ff}
 .footer{margin-top:24px;font-size:.78rem;color:#999;border-top:1px solid #eee;padding-top:14px}
 .footer code{background:#f0f3f8;padding:2px 6px;border-radius:3px;font-family:Consolas,monospace}
+
+/* ── Responsivo ──────────────────────────────────────────────── */
+@media (max-width:992px){
+  body{padding:16px}
+  .box{padding:32px 24px}
+  /* Objetivos tactiles >=40px, separados >=8px */
+  .btn{min-height:44px;padding:12px 24px}
+  .actions{gap:8px}
+}
+@media (max-width:576px){
+  body{padding:12px;font-size:14px}
+  .box{padding:24px 16px;border-radius:12px}
+  .icon-wrap{width:64px;height:64px;margin-bottom:16px}
+  .icon-wrap i{font-size:1.8rem}
+  h1{font-size:1.25rem}
+  .subtitle{font-size:.92rem;margin-bottom:16px}
+  .user-tag{font-size:.84rem;margin-bottom:16px;width:100%;justify-content:center}
+  .msg{padding:12px;font-size:.88rem;margin-bottom:16px}
+  .contact-info{font-size:.84rem;margin-bottom:16px}
+  .contact-info a{word-break:break-word}
+  /* Las acciones colapsan a una columna */
+  .actions{flex-direction:column}
+  .btn{width:100%;justify-content:center}
+}
 </style>
 </head>
 <body>
@@ -350,10 +375,29 @@ if (!function_exists('require_role')) {
 
         http_response_code(403);
         header('Content-Type: text/html; charset=utf-8');
-        echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>';
+        echo '<!doctype html><html lang="es"><head><meta charset="utf-8">';
+        echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
+        echo '<title>403 Forbidden</title>';
+        echo '<style>'
+            . '*,*::before,*::after{box-sizing:border-box}'
+            . 'body{margin:0;padding:24px;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;'
+            . 'background:#f4f6fb;color:#1a1a2e;overflow-x:hidden}'
+            . '.box{background:#fff;width:100%;max-width:560px;margin:0 auto;border-radius:14px;'
+            . 'box-shadow:0 8px 32px rgba(0,0,0,.08);padding:32px;border-top:6px solid #dc3545}'
+            . 'h1{font-size:1.5rem;color:#001550;margin:0 0 8px}'
+            . 'p{margin:0 0 16px;font-size:.95rem}'
+            . 'a{display:inline-flex;align-items:center;justify-content:center;color:#0033cc;'
+            . 'text-decoration:none;font-weight:600;padding:8px 0}'
+            . 'a:hover{text-decoration:underline}'
+            /* Responsivo: mismos breakpoints que el resto del sistema */
+            . '@media (max-width:992px){a{min-height:44px}}'
+            . '@media (max-width:576px){body{padding:12px;font-size:14px}'
+            . '.box{padding:24px 16px;border-radius:12px}h1{font-size:1.25rem}}'
+            . '</style></head><body><div class="box">';
         echo '<h1>403 — Acceso denegado</h1>';
         echo '<p>No tienes permisos para acceder a esta sección.</p>';
         echo '<p><a href="IniSoport.php">Volver al inicio</a></p>';
+        echo '</div></body></html>';
         exit;
     }
 }

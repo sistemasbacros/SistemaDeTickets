@@ -214,8 +214,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     body {
       background-color: #f4f6f9;
       font-family: Arial, sans-serif;
+      overflow-x: hidden;
     }
     .container {
+      width: 100%;
       max-width: 700px;
       background: white;
       padding: 2rem;
@@ -237,6 +239,53 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
     button[type="submit"]:hover {
       background-color: #1a4e7a;
+    }
+
+    /* ── Responsivo ──────────────────────────────────────────────── */
+    @media (max-width: 992px) {
+      .container {
+        padding: 24px 16px;
+        margin-top: 16px;
+      }
+
+      /* Objetivos táctiles ≥40px, separados ≥8px */
+      .form-control,
+      .form-select,
+      button[type="submit"] {
+        min-height: 44px;
+        font-size: 16px; /* evita el zoom automático en iOS */
+      }
+
+      .mb-3 {
+        margin-bottom: 16px !important;
+      }
+    }
+
+    @media (max-width: 576px) {
+      body {
+        font-size: 14px;
+      }
+
+      .container {
+        padding: 16px 12px;
+        margin-top: 8px;
+        border-radius: 8px;
+      }
+
+      header {
+        padding: 12px;
+        margin-bottom: 16px;
+      }
+
+      header h2 {
+        font-size: 1.25rem;
+        margin: 0;
+      }
+
+      .form-label {
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
     }
   </style>
 </head>
