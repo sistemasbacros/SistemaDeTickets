@@ -577,7 +577,7 @@ require_once __DIR__ . '/config.php';
       <div class="options-grid">
 
         <!-- Opción 1 -->
-        <a href="FORMSGRES.php" class="option-card">
+        <a href="FormSG.php" class="option-card">
           <div class="icon-drop">
             <i class="fas fa-plus-circle"></i>
           </div>
@@ -607,7 +607,7 @@ require_once __DIR__ . '/config.php';
         </a>
 
         <!-- Opción 3 -->
-        <a href="Login_Procesar.php" class="option-card">
+        <a href="Asignarticket.php" class="option-card">
           <div class="icon-drop">
             <i class="fas fa-cogs"></i>
           </div>

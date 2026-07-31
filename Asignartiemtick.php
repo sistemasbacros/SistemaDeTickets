@@ -45,19 +45,20 @@
  */
 
 require_once __DIR__ . '/auth_check_api.php';
-$arrayRecibido=json_decode($_POST["arrayDeValores"], true );
- 
-echo "Hemos recibido en el PHP un array de ".count($arrayRecibido)." elementos de luis123232";
 
-$array1530p1 = [];
+// Entrada validada: debe ser un arreglo JSON. Antes se guardaba en sesión sin
+// comprobar nada y se imprimía su contenido (más una cadena de depuración) en
+// la respuesta.
+$arrayRecibido = json_decode($_POST['arrayDeValores'] ?? '', true);
+if (!is_array($arrayRecibido)) {
+    header('Content-Type: application/json');
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'arrayDeValores inválido']);
+    exit;
+}
 
-foreach($arrayRecibido as $valor)
-{
-	
-	echo "\n- ".$valor;
-
-} 
-   session_start();
+// auth_check_api.php ya abrió la sesión; no volver a llamar session_start()
+// (emitía "session already active").
    $_SESSION['superhero'] = $arrayRecibido;
    ///$_SESSION['hola'] = $arrayRecibido[1];
    // $_SESSION['superhero2'] = $arrayRecibido[2];

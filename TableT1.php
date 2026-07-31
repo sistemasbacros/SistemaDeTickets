@@ -978,7 +978,7 @@ $usuario = $_SESSION['user_username'] ?? 'N/A';
         <!-- Acciones Premium -->
         <div class="actions-bar-premium">
             <div class="btn-group-premium">
-                <a href="dashboard.php" class="btn-premium">
+                <a href="dashti.php" class="btn-premium">
                     <i class="fas fa-home"></i> INICIO
                 </a>
                 <button class="btn-premium" id="assignTicketBtn">

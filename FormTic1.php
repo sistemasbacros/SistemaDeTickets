@@ -1215,7 +1215,7 @@ function determinarResponsableFinal($responsable_principal, $subtipo) {
   <div class="particles-container" id="particlesContainer"></div>
   
   <!-- Botón Home -->
-  <button id="homeButton" onclick="window.location.href='dashboard.php'">
+  <button id="homeButton" onclick="window.location.href='dashti.php'">
     <i class="fas fa-home"></i>
   </button>
   
