@@ -74,6 +74,10 @@ if ($shouldRedirectToDashboard) {
 $loginError = '';
 $debugInfo = [];
 
+// El bloque de debug solo se RENDERIZA si APP_DEBUG=1 en el entorno. En
+// producción queda apagado: exponía la consulta SQL y (antes) la contraseña.
+$mostrarDebug = getenv('APP_DEBUG') === '1';
+
 // Mostrar mensaje si la sesión expiró
 if (isset($_GET['error']) && $_GET['error'] === 'session_expired') {
     $loginError = 'Tu sesión ha expirado por inactividad. Por favor, inicia sesión nuevamente.';
@@ -122,8 +126,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                         WHERE Usuario = ? AND Contrasena = ?";
                 $params = array($usuario, $contrasena);
                 
-                $debugInfo[] = "📝 Ejecutando consulta: " . $sql;
-                $debugInfo[] = "📝 Parámetros: Usuario=" . $usuario . ", Contraseña=" . $contrasena;
+                // NUNCA registrar la contraseña ni el SQL: este arreglo se
+                // renderiza en el HTML de la página de login.
+                $debugInfo[] = "📝 Consulta de credenciales ejecutada";
+                $debugInfo[] = "📝 Usuario consultado: " . $usuario;
                 
                 $stmt = sqlsrv_query($conn, $sql, $params);
                 
@@ -1192,8 +1198,8 @@ ob_end_flush();
                 </div>
             </form>
 
-            <!-- Información de debug -->
-            <?php if (!empty($debugInfo)): ?>
+            <!-- Información de debug (solo con APP_DEBUG=1) -->
+            <?php if ($mostrarDebug && !empty($debugInfo)): ?>
                 <div class="debug-info">
                     <strong>🔧 Información de Debug:</strong><br>
                     <?php foreach($debugInfo as $info): ?>
