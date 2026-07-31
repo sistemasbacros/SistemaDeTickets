@@ -95,3 +95,29 @@ if (!function_exists('api_call')) {
         ];
     }
 }
+
+if (!function_exists('web_base_path')) {
+    /**
+     * Prefijo web del sitio tal como lo ve el NAVEGADOR.
+     *
+     * En producción Traefik enruta `/tickets` y QUITA el prefijo antes de
+     * llegar a nginx, pero el navegador sigue navegando bajo /tickets. Por eso
+     * cualquier URL que se renderice al cliente (img src, href, fetch) debe
+     * llevar este prefijo; si se emitiera '/api/...' a la raíz del dominio,
+     * Traefik no tendría regla y devolvería 404.
+     *
+     * En test (puerto directo, sin Traefik) devuelve '' — sin prefijo.
+     */
+    function web_base_path(): string {
+        $script = $_SERVER['SCRIPT_NAME'] ?? '';
+        $dir    = rtrim(strtr(dirname($script), '\\', '/'), '/');
+        return ($dir === '' || $dir === '.') ? '' : $dir;
+    }
+}
+
+if (!function_exists('api_web_url')) {
+    /** URL de un recurso del API para consumir desde el navegador. */
+    function api_web_url(string $path): string {
+        return web_base_path() . '/' . ltrim($path, '/');
+    }
+}

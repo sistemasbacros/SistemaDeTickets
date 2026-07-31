@@ -20,6 +20,7 @@ exit;
  */
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/api_client.php';
 
 function getApiUrl(): string {
     $url = getenv('PDF_API_URL') ?: '';
@@ -321,7 +322,7 @@ tr:last-child td { border-bottom: none; }
                             <td><?= htmlspecialchars($f['fecha_firma'] ? substr($f['fecha_firma'], 0, 16) : '—') ?></td>
                             <td>
                                 <?php if (!empty($f['firma_img'])): ?>
-                                    <img src="<?= htmlspecialchars(getApiUrl() . '/api/TicketBacros/firmas/' . $f['firma_img']) ?>"
+                                    <img src="<?= htmlspecialchars(api_web_url('/api/TicketBacros/firmas/' . $f['firma_img'])) ?>"
                                          alt="Firma <?= (int)$f['orden'] ?>"
                                          class="firma-thumb" />
                                 <?php else: ?>

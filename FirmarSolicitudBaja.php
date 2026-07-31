@@ -382,7 +382,11 @@ button:disabled { opacity: .6; cursor: not-allowed; transform: none !important; 
 // HTTP (dev local)   → puerto 3000 explícito (frontend y backend separados)
 // Mismo-origen SIEMPRE: nginx proxea /api/ al backend (ver nginx.conf).
 // Evita CORS y cumple la CSP connect-src 'self'.
-const API_URL = '';
+// Base del sitio: en produccion Traefik enruta /tickets y QUITA el prefijo,
+// pero el navegador sigue viendo /tickets/... — si llamaramos '/api/...' a la
+// raiz del dominio, Traefik no tendria regla y devolveria 404. Se deriva el
+// prefijo del propio path de la pagina (en test, sin prefijo, queda '').
+const API_URL = window.location.pathname.replace(/\/[^\/]*$/, '');
 const TOKEN   = '<?= htmlspecialchars($token, ENT_QUOTES) ?>';
 
 let firmanteData = null;

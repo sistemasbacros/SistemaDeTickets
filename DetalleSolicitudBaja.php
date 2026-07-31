@@ -8,6 +8,7 @@
  */
 
 require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/api_client.php';
 require_once __DIR__ . '/roles.php';
 require_jefe_area_strict();   // Solo usuarios en dbo.JefesArea (sin fallback)
 require_once __DIR__ . '/config.php';
@@ -514,7 +515,7 @@ h2 {
                         </div>
 
                         <?php if (!empty($f['firma_img'])): ?>
-                            <img src="<?= htmlspecialchars('/api/TicketBacros/firmas/' . $f['firma_img']) ?>"
+                            <img src="<?= htmlspecialchars(api_web_url('/api/TicketBacros/firmas/' . $f['firma_img'])) ?>"
                                  alt="Firma" class="firma-thumb" />
                         <?php endif; ?>
                     </div>
@@ -557,7 +558,7 @@ h2 {
                             </div>
                         </div>
                         <?php if (!empty($f['firma_img'])): ?>
-                            <img src="<?= htmlspecialchars('/api/TicketBacros/firmas/' . $f['firma_img']) ?>" class="firma-thumb" />
+                            <img src="<?= htmlspecialchars(api_web_url('/api/TicketBacros/firmas/' . $f['firma_img'])) ?>" class="firma-thumb" />
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
@@ -622,7 +623,11 @@ document.getElementById('homeButton').addEventListener('click', () => {
 function previsualizarPdf() {
     const folio = '<?= htmlspecialchars($folio, ENT_QUOTES) ?>';
     // Mismo-origen SIEMPRE: nginx proxea /api/ al backend (ver nginx.conf).
-    const API_URL = '';
+    // Base del sitio: en produccion Traefik enruta /tickets y QUITA el prefijo,
+// pero el navegador sigue viendo /tickets/... — si llamaramos '/api/...' a la
+// raiz del dominio, Traefik no tendria regla y devolveria 404. Se deriva el
+// prefijo del propio path de la pagina (en test, sin prefijo, queda '').
+const API_URL = window.location.pathname.replace(/\/[^\/]*$/, '');
     const pdfUrl = `${API_URL}/api/TicketBacros/pdfs/BCR-TH-SGI-FO-27_BAJA_${folio.replace(/-/g, '_')}.pdf?t=${Date.now()}`;
 
     const container = document.getElementById('pdfPreviewContainer');
@@ -645,7 +650,11 @@ async function enviarPdfPorCorreo() {
     if (!folio) return;
 
     // Mismo-origen SIEMPRE: nginx proxea /api/ al backend (ver nginx.conf).
-    const API_URL = '';
+    // Base del sitio: en produccion Traefik enruta /tickets y QUITA el prefijo,
+// pero el navegador sigue viendo /tickets/... — si llamaramos '/api/...' a la
+// raiz del dominio, Traefik no tendria regla y devolveria 404. Se deriva el
+// prefijo del propio path de la pagina (en test, sin prefijo, queda '').
+const API_URL = window.location.pathname.replace(/\/[^\/]*$/, '');
 
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';

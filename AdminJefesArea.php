@@ -422,7 +422,11 @@ tr:last-child td { border-bottom: none; }
 // HTTP (dev local)   → puerto 3000 explícito (frontend y backend separados)
 // Mismo-origen SIEMPRE: nginx proxea /api/ al backend (ver nginx.conf).
 // Evita CORS y cumple la CSP connect-src 'self'.
-const API_URL = '';
+// Base del sitio: en produccion Traefik enruta /tickets y QUITA el prefijo,
+// pero el navegador sigue viendo /tickets/... — si llamaramos '/api/...' a la
+// raiz del dominio, Traefik no tendria regla y devolveria 404. Se deriva el
+// prefijo del propio path de la pagina (en test, sin prefijo, queda '').
+const API_URL = window.location.pathname.replace(/\/[^\/]*$/, '');
 let jwtToken = <?= json_encode($apiJwt ?: null, JSON_UNESCAPED_SLASHES) ?>;
 let jefesData = [];
 
@@ -443,50 +447,21 @@ async function safeJson(res) {
     }
 }
 
-// ── Login al API desde el navegador ────────────────────────────
+// ── Token del API ─────────────────────────────────────────────
+// El JWT viene de la SESIÓN (login unificado de IDENTIDAD), inyectado arriba
+// en `jwtToken`. Antes esta página abría un popup pidiendo usuario y
+// contraseña otra vez y los mandaba al endpoint legacy /auth/login: doble
+// autenticación innecesaria y credenciales expuestas en el navegador.
 async function obtenerToken() {
     if (jwtToken) return true;
-
-    // Pedir credenciales una sola vez
-    const { value: creds } = await Swal.fire({
-        title: 'Autenticacion API',
-        html: `
-            <input id="swal-user" class="swal2-input" placeholder="Usuario" value="<?= $userUsername ?>" style="font-size:.95rem">
-            <input id="swal-pass" class="swal2-input" type="password" placeholder="Contrasena" style="font-size:.95rem" autofocus>
-        `,
-        focusConfirm: false,
-        confirmButtonText: 'Conectar',
+    await Swal.fire({
+        title: 'Sesión expirada',
+        text: 'Vuelve a iniciar sesión para continuar.',
+        icon: 'warning',
         confirmButtonColor: '#003366',
-        showCancelButton: false,
-        allowOutsideClick: false,
-        preConfirm: () => {
-            const u = document.getElementById('swal-user').value.trim();
-            const p = document.getElementById('swal-pass').value.trim();
-            if (!u || !p) { Swal.showValidationMessage('Complete ambos campos'); return false; }
-            return { usuario: u, contrasena: p };
-        }
     });
-
-    if (!creds) return false;
-
-    try {
-        const res = await fetch(`${API_URL}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(creds),
-        });
-        const data = await safeJson(res);
-        if (res.ok && data.token) {
-            jwtToken = data.token;
-            console.log('JWT obtenido, longitud:', jwtToken.length, 'inicio:', jwtToken.substring(0, 20));
-            return true;
-        } else {
-            throw new Error(data.message || data.error || 'Credenciales invalidas');
-        }
-    } catch (err) {
-        await Swal.fire({ title: 'Error de login', text: err.message, icon: 'error', confirmButtonColor: '#003366' });
-        return false;
-    }
+    window.location.href = 'Loginti.php';
+    return false;
 }
 
 // ── Cargar jefes ───────────────────────────────────────────────
