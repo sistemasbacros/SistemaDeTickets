@@ -743,6 +743,9 @@ $iniciales = strtoupper(substr($nombre, 0, 2));
             <button class="theme-toggle-btn" id="themeToggle"><i class="fas fa-sun"></i> MODO CLARO</button>
         </div>
         <div style="padding:0 var(--spacing-md);">
+            <a href="cambiar_contrasena.php" class="logout-btn" style="background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#bfdbfe;text-decoration:none;">
+                <i class="fas fa-key"></i> CAMBIAR CONTRASEÑA
+            </a>
             <button type="button" class="logout-btn" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> CERRAR SESIÓN</button>
         </div>
     </nav>
