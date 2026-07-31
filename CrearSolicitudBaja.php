@@ -22,7 +22,7 @@ function getApiUrl(): string {
             }
         }
     }
-    return rtrim($url ?: 'http://localhost:3000', '/');
+    return rtrim($url ?: 'http://host.docker.internal:3000', '/');
 }
 
 $resultado   = null;

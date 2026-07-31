@@ -114,7 +114,9 @@ $conn = sqlsrv_connect( $serverName, $connectionInfo);
 $sql = "Select * from CatologodeContratos";
 $stmt = sqlsrv_query( $conn, $sql );
 if( $stmt === false) {
-    die( print_r( sqlsrv_errors(), true) );
+    // No volcar sqlsrv_errors() al navegador: expone host, base y usuario.
+    error_log('CatologoContratos: fallo de consulta - ' . print_r(sqlsrv_errors(), true));
+    die('No se pudo consultar el catalogo de contratos. Avisa a Sistemas.');
 }
 
 

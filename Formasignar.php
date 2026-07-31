@@ -211,6 +211,7 @@ $apiUrl = rtrim(getenv('PDF_API_URL') ?: 'http://host.docker.internal:3000', '/'
     </form>
 
     </div>
+<?php require_once __DIR__ . '/csrf_ajax.php'; ?>
 </body>
 </html>
 

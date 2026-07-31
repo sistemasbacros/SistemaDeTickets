@@ -24,7 +24,7 @@ function getApiUrl(): string {
             }
         }
     }
-    return rtrim($url ?: 'http://localhost:3000', '/');
+    return rtrim($url ?: 'http://host.docker.internal:3000', '/');
 }
 
 $folio   = trim($_GET['folio'] ?? '');
@@ -621,11 +621,8 @@ document.getElementById('homeButton').addEventListener('click', () => {
 
 function previsualizarPdf() {
     const folio = '<?= htmlspecialchars($folio, ENT_QUOTES) ?>';
-    // HTTPS (producción) → same-origin (nginx proxy a localhost:3000)
-    // HTTP (dev local)   → puerto 3000 explícito
-    const API_URL = window.location.protocol === 'https:'
-        ? window.location.origin
-        : window.location.protocol + '//' + window.location.hostname + ':3000';
+    // Mismo-origen SIEMPRE: nginx proxea /api/ al backend (ver nginx.conf).
+    const API_URL = '';
     const pdfUrl = `${API_URL}/api/TicketBacros/pdfs/BCR-TH-SGI-FO-27_BAJA_${folio.replace(/-/g, '_')}.pdf?t=${Date.now()}`;
 
     const container = document.getElementById('pdfPreviewContainer');
@@ -647,11 +644,8 @@ async function enviarPdfPorCorreo() {
     const folio = '<?= htmlspecialchars($folio, ENT_QUOTES) ?>';
     if (!folio) return;
 
-    // HTTPS (producción) → same-origin (nginx proxy a localhost:3000)
-    // HTTP (dev local)   → puerto 3000 explícito
-    const API_URL = window.location.protocol === 'https:'
-        ? window.location.origin
-        : window.location.protocol + '//' + window.location.hostname + ':3000';
+    // Mismo-origen SIEMPRE: nginx proxea /api/ al backend (ver nginx.conf).
+    const API_URL = '';
 
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
@@ -690,5 +684,6 @@ async function enviarPdfPorCorreo() {
     }
 }
 </script>
+<?php require_once __DIR__ . '/csrf_ajax.php'; ?>
 </body>
 </html>

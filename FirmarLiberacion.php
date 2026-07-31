@@ -159,7 +159,7 @@ function getApiUrl(): string {
             }
         }
     }
-    return rtrim($url ?: 'http://localhost:3000', '/');
+    return rtrim($url ?: 'http://host.docker.internal:3000', '/');
 }
 
 $folio  = trim($_GET['folio']  ?? '');
@@ -628,5 +628,6 @@ async function enviarAccion(accion) {
     }
 }
 </script>
+<?php require_once __DIR__ . '/csrf_ajax.php'; ?>
 </body>
 </html>

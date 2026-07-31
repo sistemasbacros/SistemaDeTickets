@@ -14,6 +14,7 @@ if ($IS_DEV) {
 }
 
 require_once __DIR__ . '/login_rate_limit.php';
+require_once __DIR__ . '/api_client.php';
 
 // CONFIGURACIÓN DE SESIÓN SEGURA ANTES DE session_start()
 ini_set('session.cookie_httponly', 1);
@@ -132,29 +133,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
             $loginError = 'Usuario y contraseña son requeridos';
             $debugInfo[] = "❌ Error: Campos vacíos";
         } else {
-            // ── Autenticacion via API ──────────────────────────────────
-            // PHP corre en Docker: host.docker.internal apunta a la maquina host
-            $apiLoginUrl = 'http://host.docker.internal:3000/auth/login';
-            $apiPayload  = json_encode([
+            // ── Autenticación con el LOGIN UNIFICADO (IDENTIDAD) ───────
+            // Mismas credenciales que RRHH y el resto del ecosistema: Argon2
+            // en IDENTIDAD.CredencialLocal, con re-hash transparente desde el
+            // legacy en el primer inicio. La URL viene de api_client.php
+            // (PDF_API_URL), nunca hardcodeada.
+            $apiRes      = api_call('POST', '/api/identidad/auth/login', [
                 'usuario'    => $usuario,
                 'contrasena' => $contrasena,
-            ], JSON_UNESCAPED_UNICODE);
-
-            $debugInfo[] = "🔑 Autenticando via API: " . $apiLoginUrl;
-
-            $ch = curl_init($apiLoginUrl);
-            curl_setopt_array($ch, [
-                CURLOPT_POST           => true,
-                CURLOPT_POSTFIELDS     => $apiPayload,
-                CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 15,
-                CURLOPT_CONNECTTIMEOUT => 10,
             ]);
-            $apiResp     = curl_exec($ch);
-            $apiCurlErr  = curl_error($ch);
-            $apiHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
+            $apiResp     = $apiRes['body'];
+            $apiCurlErr  = $apiRes['error'];
+            $apiHttpCode = $apiRes['http'];
 
             $debugInfo[] = "🔑 API HTTP: " . $apiHttpCode . " | cURL: " . ($apiCurlErr ?: 'OK');
 
@@ -174,12 +164,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                     $jwtParts = explode('.', $token);
                     $jwtPayload = json_decode(base64_decode(strtr($jwtParts[1] ?? '', '-_', '+/')), true) ?: [];
 
-                    // Datos del usuario: primero del body de respuesta, luego del JWT
-                    $userData = $apiData['user'] ?? $apiData['usuario'] ?? $jwtPayload;
+                    // El login unificado responde { token, identidad{...},
+                    // requiere_cambio, es_jefe }. Se aceptan las formas viejas
+                    // por compatibilidad si algún entorno aún no actualizó.
+                    $userData = $apiData['identidad'] ?? $apiData['user'] ?? $apiData['usuario'] ?? $jwtPayload;
 
                     $userName   = $userData['nombre']    ?? $userData['nombre_completo'] ?? $userData['Nombre'] ?? $usuario;
                     $userArea   = $userData['area']       ?? $userData['Area']            ?? '';
-                    $userId     = $userData['id']         ?? $userData['Id_Empleado']     ?? $userData['id_empleado'] ?? '';
+                    $userId     = $userData['id_empleado'] ?? $userData['Id_Empleado']    ?? $userData['id'] ?? '';
                     $userLogin  = $userData['usuario']    ?? $userData['Usuario']         ?? $usuario;
 
                     $debugInfo[] = "✅ Usuario: " . $userName . " | Area: " . $userArea;
@@ -207,7 +199,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                     $_SESSION['login_source']     = 'form_login';
                     $_SESSION['origin_token']     = bin2hex(random_bytes(16));
 
+                    // Datos del login unificado que consumen otras páginas.
+                    $_SESSION['es_jefe']         = (bool) ($apiData['es_jefe'] ?? false);
+                    $_SESSION['requiere_cambio'] = (bool) ($apiData['requiere_cambio'] ?? false);
+
                     $debugInfo[] = "✅ Sesión configurada con JWT";
+
+                    // Contraseña temporal emitida por RRHH: cambio obligatorio
+                    // antes de usar el sistema (misma regla que el HRIS).
+                    if (!empty($_SESSION['requiere_cambio'])) {
+                        $debugInfo[] = "🔒 Cambio de contraseña obligatorio";
+                        header('Location: cambiar_contrasena.php?obligatorio=1');
+                        ob_end_flush();
+                        exit();
+                    }
 
                     $redirectTarget = getRedirectTarget();
                     $debugInfo[] = "🔄 Redirigiendo a " . $redirectTarget;
@@ -220,6 +225,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usuario']) && isset($
                     login_throttle_register_failure();
                     $loginError = 'Usuario o contraseña incorrectos';
                     $debugInfo[] = "❌ Credenciales inválidas (HTTP " . $apiHttpCode . ")";
+                } elseif ($apiHttpCode === 429) {
+                    // El backend bloquea tras 5 intentos fallidos (15 min).
+                    $loginError = 'Demasiados intentos fallidos. Tu cuenta quedó bloqueada temporalmente; intenta de nuevo en unos minutos.';
+                    $debugInfo[] = "⛔ Bloqueo por intentos (HTTP 429)";
                 } else {
                     $msg = $apiData['message'] ?? $apiData['error'] ?? 'Error desconocido';
                     $loginError = 'Error del servidor de autenticación: ' . htmlspecialchars($msg);
@@ -1210,6 +1219,13 @@ ob_end_flush();
                     <span>Sesión segura - Se cerrará automáticamente después de 30 minutos de inactividad</span>
                 </div>
             </form>
+
+            <div style="text-align:center;margin-top:14px">
+                <a href="recuperar.php"
+                   style="color:#64a8ff;text-decoration:none;font-size:14px">
+                    ¿Olvidaste tu contraseña?
+                </a>
+            </div>
 
             <!-- Información de debug — solo visible en modo dev -->
             <?php if ($IS_DEV && !empty($debugInfo)): ?>

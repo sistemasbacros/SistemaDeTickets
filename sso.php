@@ -14,9 +14,12 @@
 
 // CONFIGURACIÓN DE SESIÓN SEGURA ANTES DE session_start() (igual que Loginti.php)
 ini_set('session.cookie_httponly', 1);
-ini_set('session.cookie_secure', 0); // Cambiar a 1 si usas HTTPS
+ini_set('session.cookie_secure', 1); // HTTPS forzado por Cloudflare/nginx (igual que Loginti.php)
 ini_set('session.use_strict_mode', 1);
-ini_set('session.cookie_samesite', 'Strict');
+// Lax (no Strict) para coincidir con Loginti.php/auth_check.php: mezclar
+// SameSite hacía que el navegador no mandara la cookie al volver del portal
+// y la sesión se perdía en la primera página protegida.
+ini_set('session.cookie_samesite', 'Lax');
 ini_set('session.use_only_cookies', 1);
 
 session_start();
@@ -82,6 +85,10 @@ $_SESSION['initiated'] = true;
 $_SESSION['last_regeneration'] = time();
 $_SESSION['login_source'] = 'sso_portal'; // Origen: Portal Bacrocorp
 $_SESSION['origin_token'] = bin2hex(random_bytes(16));
+
+// JWT del canje: sin esto quien entra por SSO se queda sin credencial para el
+// API (roles.php devolvía [] y caía a la lista hardcodeada de admins).
+$_SESSION['api_jwt'] = $data['token'];
 
 header("Location: IniSoport.php");
 exit();

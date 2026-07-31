@@ -699,5 +699,6 @@ require_once __DIR__ . '/auth_check.php';
     });
   </script>
 
+<?php require_once __DIR__ . '/csrf_ajax.php'; ?>
 </body>
 </html>

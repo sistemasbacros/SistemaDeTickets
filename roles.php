@@ -79,7 +79,7 @@ if (!function_exists('roles_api_url')) {
                 }
             }
         }
-        return rtrim($url ?: 'http://localhost:3000', '/');
+        return rtrim($url ?: 'http://host.docker.internal:3000', '/');
     }
 }
 

@@ -26,7 +26,7 @@ function getApiUrl(): string {
             }
         }
     }
-    return rtrim($url ?: 'http://localhost:3000', '/');
+    return rtrim($url ?: 'http://host.docker.internal:3000', '/');
 }
 
 $apiUrlJs    = htmlspecialchars(getApiUrl());
@@ -420,9 +420,9 @@ tr:last-child td { border-bottom: none; }
 <script>
 // HTTPS (producción) → same-origin (nginx hace proxy interno a localhost:3000)
 // HTTP (dev local)   → puerto 3000 explícito (frontend y backend separados)
-const API_URL = window.location.protocol === 'https:'
-    ? window.location.origin
-    : window.location.protocol + '//' + window.location.hostname + ':3000';
+// Mismo-origen SIEMPRE: nginx proxea /api/ al backend (ver nginx.conf).
+// Evita CORS y cumple la CSP connect-src 'self'.
+const API_URL = '';
 let jwtToken = <?= json_encode($apiJwt ?: null, JSON_UNESCAPED_SLASHES) ?>;
 let jefesData = [];
 
@@ -867,5 +867,6 @@ document.getElementById('modalMultiArea').addEventListener('click', function(e) 
     if (e.target === this) cerrarModalMulti();
 });
 </script>
+<?php require_once __DIR__ . '/csrf_ajax.php'; ?>
 </body>
 </html>

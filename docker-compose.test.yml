@@ -23,6 +23,10 @@ services:
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
+      # URL del backend Rust. Sin esto, las páginas que hablan con el API caían
+      # a localhost:3000 = el propio contenedor PHP → connection refused.
+      - PDF_API_URL=${PDF_API_URL:-http://host.docker.internal:3000}
+      - SNIPE_IT_URL=${SNIPE_IT_TEST:-${SNIPE_IT_URL}}
       - TZ=America/Mexico_City
     networks:
       - tickets_network_test

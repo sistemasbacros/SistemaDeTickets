@@ -55,7 +55,10 @@ $valid = (
     !empty($_SESSION['user_id'])                &&
     !empty($_SESSION['session_token'])          &&
     !empty($_SESSION['ip_address'])             && $_SESSION['ip_address'] === ($_SERVER['REMOTE_ADDR'] ?? '') &&
-    !empty($_SESSION['login_source'])           && $_SESSION['login_source'] === 'form_login' &&
+    // Se acepta el login por formulario y el SSO del Portal Bacrocorp: antes
+    // solo 'form_login', por lo que quien entraba por SSO era expulsado en la
+    // primera página protegida.
+    !empty($_SESSION['login_source'])           && in_array($_SESSION['login_source'], ['form_login', 'sso_portal'], true) &&
     !empty($_SESSION['LOGIN_TIME'])             && (time() - $_SESSION['LOGIN_TIME'])    <= $ABS_TIMEOUT &&
     !empty($_SESSION['LAST_ACTIVITY'])          && (time() - $_SESSION['LAST_ACTIVITY']) <= $INACT_LIMIT
 );

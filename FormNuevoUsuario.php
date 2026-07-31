@@ -318,7 +318,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
-    $pdfApiUrl = rtrim($pdfApiUrl ?: 'http://localhost:3000', '/');
+    $pdfApiUrl = rtrim($pdfApiUrl ?: 'http://host.docker.internal:3000', '/');
 
     $ch = curl_init($pdfApiUrl . '/api/TicketBacros/carta-resguardo');
     curl_setopt_array($ch, [

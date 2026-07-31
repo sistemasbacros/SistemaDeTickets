@@ -258,6 +258,7 @@ foreach($_SESSION['superhero'] as $valor)
 <div id="mensajeResultado" style="margin-top:15px;"></div>
 
     </div>
+<?php require_once __DIR__ . '/csrf_ajax.php'; ?>
 </body>
 </html>
 

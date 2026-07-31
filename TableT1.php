@@ -1442,5 +1442,6 @@ $usuario = $_SESSION['user_username'] ?? 'N/A';
             });
         });
     </script>
+<?php require_once __DIR__ . '/csrf_ajax.php'; ?>
 </body>
 </html>

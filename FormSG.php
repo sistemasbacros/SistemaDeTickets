@@ -77,7 +77,7 @@ function getApiUrl(): string
     }
 
     // 3. Localhost para entornos locales sin Docker
-    return 'http://localhost:3000';
+    return 'http://host.docker.internal:3000';
 }
 ?>
 <!DOCTYPE html>
@@ -556,5 +556,6 @@ function getApiUrl(): string
         .replace(/"/g, '&quot;');
     }
   </script>
+<?php require_once __DIR__ . '/csrf_ajax.php'; ?>
 </body>
 </html>
