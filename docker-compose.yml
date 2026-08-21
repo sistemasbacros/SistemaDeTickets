@@ -24,8 +24,6 @@ services:
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - TZ=America/Mexico_City
-      - SNIPE_IT_URL=${SNIPE_IT_URL:-http://192.168.100.91}
-      - SNIPE_IT_TEST=${SNIPE_IT_TEST}
       - PDF_API_URL=${PDF_API_URL:-http://host.docker.internal:3000}
     networks:
       - tickets_network
