@@ -11,48 +11,125 @@ require_role('admin');
 
 require_once __DIR__ . '/config.php';
 
-// ── Snipe-IT: leer vars del .env aunque Docker haya omitido el loader ─────────
-function getSnipeVars(): array
-{
-    $url   = getenv('SNIPE_IT_URL')  ?: '';
-    $token = getenv('SNIPE_IT_TEST') ?: '';
+// ── Snipe-IT: TODO pasa por el backend ───────────────────────────────────────
+//
+// Antes este archivo le hablaba directo a Snipe-IT con `curl`, y para eso
+// necesitaba SNIPE_IT_URL y SNIPE_IT_TEST dentro del contenedor PHP. Eso
+// significaba tener el token del ERP de activos en un segundo lugar, y viola la
+// regla de la casa: los PHP legacy consumen el API del backend, no servicios ni
+// bases directo.
+//
+// Ahora el unico que sale hacia Snipe-IT es el backend Rust, detras de JWT
+// (/api/TicketBacros/snipeit/*). Aqui ya no hay URL ni token.
+//
+// Las tres funciones conservan su firma y su forma de respuesta a proposito:
+// asi los ~1300 renglones que las llaman siguen igual y el cambio se queda
+// contenido en este bloque.
+require_once __DIR__ . '/api_client.php';
 
-    if (!$url || !$token) {
-        $envFile = __DIR__ . '/.env';
-        if (file_exists($envFile)) {
-            foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-                if (strpos(trim($line), '#') === 0 || strpos($line, '=') === false) continue;
-                [$k, $v] = explode('=', $line, 2);
-                $k = trim($k); $v = trim($v);
-                if ($k === 'SNIPE_IT_URL'  && !$url)   $url   = $v;
-                if ($k === 'SNIPE_IT_TEST' && !$token) $token = $v;
-            }
-        }
+/**
+ * Traduce una ruta de la API de Snipe-IT al endpoint equivalente del backend.
+ *
+ * @return string|null null si la ruta no esta cubierta (se registra y falla
+ *                     de forma explicita, en vez de salir a Snipe-IT por atras).
+ */
+function snipe_backend_path(string $endpoint, string $method): ?string
+{
+    $base = '/api/TicketBacros/snipeit';
+    // Se compara sin query string: el backend fija sus propios limit/sort.
+    $ruta = strtok($endpoint, '?');
+
+    if ($method === 'GET') {
+        $catalogos = [
+            '/companies'   => '/companies',
+            '/departments' => '/departments',
+            '/locations'   => '/locations',
+            '/users'       => '/managers',
+            '/licenses'    => '/licencias',
+            '/hardware'    => '/hardware',
+        ];
+        return isset($catalogos[$ruta]) ? $base . $catalogos[$ruta] : null;
     }
-    return [$url, $token];
+
+    if ($ruta === '/users') {
+        return $base . '/usuarios';
+    }
+    if (preg_match('#^/hardware/(\d+)/(checkout|checkin)$#', $ruta, $m)) {
+        return $base . '/hardware/' . $m[1] . '/' . $m[2];
+    }
+    if (preg_match('#^/licenses/(\d+)/checkout$#', $ruta, $m)) {
+        return $base . '/licencias/' . $m[1] . '/checkout';
+    }
+    return null;
 }
 
+/**
+ * Reemplazo de la llamada directa a Snipe-IT.
+ *
+ * Devuelve la MISMA forma que antes (`status`, `messages`, `payload`, `error`)
+ * para no tocar a quien la llama.
+ */
+function snipeRequest(string $endpoint, string $method = 'GET', array $body = []): array
+{
+    $path = snipe_backend_path($endpoint, strtoupper($method));
+    if ($path === null) {
+        @error_log('SNIPE_RUTA_NO_MAPEADA endpoint=' . $endpoint . ' method=' . $method);
+        return ['error' => 'Operacion de Snipe-IT no disponible en el backend: ' . $endpoint];
+    }
+
+    $r = api_call(strtoupper($method), $path, $method === 'GET' ? null : $body, [], 30);
+
+    if (!$r['ok']) {
+        // El backend ya traduce los errores de negocio de Snipe-IT (que llegan
+        // como HTTP 200 con status=error) a un {error: "..."}.
+        $msg = $r['json']['error'] ?? $r['error'] ?? ('HTTP ' . $r['http']);
+        return ['error' => $msg, 'status' => 'error', 'messages' => $msg];
+    }
+
+    $json = $r['json'] ?? [];
+
+    // El alta responde {id: N}; los llamadores esperan payload.id
+    if (isset($json['id']) && !isset($json['payload'])) {
+        return ['status' => 'success', 'payload' => ['id' => $json['id']]];
+    }
+    // Los catalogos vienen tal cual de Snipe-IT ({total, rows}).
+    if (isset($json['rows'])) {
+        return $json;
+    }
+    // checkout/checkin responden {ok:true}
+    if (($json['ok'] ?? false) === true) {
+        return ['status' => 'success', 'messages' => ''];
+    }
+    return is_array($json) ? $json : [];
+}
+
+/**
+ * Sube la foto del usuario. Va multipart contra el backend, que la reenvia a
+ * Snipe-IT. El JWT viaja en la cabecera igual que en el resto de llamadas.
+ */
 function snipeUploadAvatar(int $userId, string $filePath): array
 {
-    [$snipeUrl, $snipeToken] = getSnipeVars();
-    if (!$snipeUrl || !$snipeToken) return ['error' => 'Snipe-IT no configurado.'];
-    if (!file_exists($filePath))    return ['error' => 'Archivo de avatar no encontrado.'];
+    if (!file_exists($filePath)) {
+        return ['error' => 'Archivo de avatar no encontrado.'];
+    }
 
+    $url  = api_base_url() . '/api/TicketBacros/snipeit/usuarios/' . $userId . '/avatar';
     $mime = mime_content_type($filePath) ?: 'image/jpeg';
 
-    $ch = curl_init($snipeUrl . '/api/v1/users/' . $userId);
+    $headers = ['Accept: application/json'];
+    if (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['api_jwt'])) {
+        $headers[] = 'Authorization: Bearer ' . $_SESSION['api_jwt'];
+    }
+
+    $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 30,
-        CURLOPT_CUSTOMREQUEST  => 'PATCH',
-        CURLOPT_HTTPHEADER     => [
-            'Authorization: Bearer ' . $snipeToken,
-            'Accept: application/json',
-            // Sin Content-Type manual: cURL lo genera automático con boundary para multipart
-        ],
-        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_POST           => true,
+        CURLOPT_HTTPHEADER     => $headers,
+        // Sin Content-Type manual: cURL arma el boundary del multipart.
         CURLOPT_POSTFIELDS     => [
-            'avatar' => new CURLFile($filePath, $mime, basename($filePath)),
+            'image' => new CURLFile($filePath, $mime, basename($filePath)),
         ],
     ]);
     $resp = curl_exec($ch);
@@ -60,39 +137,11 @@ function snipeUploadAvatar(int $userId, string $filePath): array
     $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    if ($err)       return ['error' => 'cURL avatar: ' . $err];
-    if ($http >= 400) return ['error' => 'Snipe-IT avatar HTTP ' . $http . ': ' . $resp];
+    if ($err)         return ['error' => 'cURL avatar: ' . $err];
+    if ($http >= 400) return ['error' => 'Avatar HTTP ' . $http . ': ' . $resp];
 
-    $decoded = json_decode($resp, true);
-    return is_array($decoded) ? $decoded : ['error' => 'Respuesta inválida al subir avatar.'];
-}
-
-function snipeRequest(string $endpoint, string $method = 'GET', array $body = []): array
-{
-    [$snipeUrl, $snipeToken] = getSnipeVars();
-    if (!$snipeUrl || !$snipeToken) return ['error' => 'Snipe-IT no configurado.'];
-
-    $ch = curl_init($snipeUrl . '/api/v1' . $endpoint);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 20,
-        CURLOPT_HTTPHEADER     => [
-            'Authorization: Bearer ' . $snipeToken,
-            'Accept: application/json',
-            'Content-Type: application/json',
-        ],
-        CURLOPT_SSL_VERIFYPEER => false,
-    ]);
-    if ($method === 'POST') {
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
-    }
-    $resp = curl_exec($ch);
-    $err  = curl_error($ch);
-    curl_close($ch);
-    if ($err) return ['error' => 'cURL: ' . $err];
-    $decoded = json_decode($resp, true);
-    return is_array($decoded) ? $decoded : ['error' => 'Respuesta inválida de Snipe-IT.'];
+    $decoded = json_decode((string) $resp, true);
+    return is_array($decoded) ? $decoded : ['error' => 'Respuesta invalida al subir avatar.'];
 }
 
 // ── POST: crear usuario + checkout assets + PDF ───────────────────────────────
@@ -306,7 +355,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'equipos'          => $equiposPdf,
     ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
-    // Leer PDF_API_URL del entorno (con fallback directo al .env igual que getSnipeVars)
+    // Leer PDF_API_URL del entorno (mismo patron que api_client.php)
     $pdfApiUrl = getenv('PDF_API_URL') ?: '';
     if (!$pdfApiUrl) {
         $envFile = __DIR__ . '/.env';
