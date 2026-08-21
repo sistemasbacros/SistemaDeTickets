@@ -74,9 +74,10 @@ if (!defined('COMEDOR_URL')) {
     define('COMEDOR_URL', rtrim(getenv('COMEDOR_URL') ?: 'http://192.168.100.79', '/'));
 }
 
-// ─── Snipe-IT (inventario TI) ────────────────────────────────────────────────
-$SNIPE_IT_URL   = rtrim(getenv('SNIPE_IT_URL') ?: '', '/');
-$SNIPE_IT_TOKEN = getenv('SNIPE_IT_TEST');
+// --- Snipe-IT -------------------------------------------------------------
+// Ya NO se configura aqui. Todo el trato con Snipe-IT pasa por el backend
+// (/api/TicketBacros/snipeit/*), que es el unico que tiene su URL y su token.
+// $SNIPE_IT_URL y $SNIPE_IT_TOKEN vivieron aqui, pero no los consumia nadie.
 
 /**
  * Configura el transporte SMTP en una instancia de PHPMailer.
